@@ -1,0 +1,9 @@
+__pycache__/
+*.pyc
+.venv/
+.env
+ecom.db
+alembic/versions/__pycache__/
+.pytest_cache/
+.coverage
+htmlcov/
