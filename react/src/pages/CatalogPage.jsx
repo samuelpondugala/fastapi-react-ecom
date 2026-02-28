@@ -4,6 +4,7 @@ import { useSearchParams } from 'react-router-dom';
 import ProductCard from '../components/ProductCard';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
+import { errorToast, successToast } from '../lib/toast';
 
 export default function CatalogPage() {
   const { token } = useAuth();
@@ -68,12 +69,13 @@ export default function CatalogPage() {
   async function addToCart(variant) {
     if (!token) {
       setError('Please login to add products to cart.');
+      errorToast('Please login to add products to cart.');
       return;
     }
     try {
       await api.cart.addItem(token, { variant_id: variant.id, quantity: 1 });
       setError('');
-      window.alert('Added to cart');
+      successToast('Item added to cart.');
     } catch (err) {
       setError(err.message || 'Failed to add item to cart.');
     }

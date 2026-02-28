@@ -1,3 +1,5 @@
+import { errorToast } from './toast';
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:8000/api/v1';
 
@@ -37,10 +39,12 @@ async function request(path, { method = 'GET', token, body, query, headers = {} 
   });
 
   const isJson = (response.headers.get('content-type') || '').includes('application/json');
-  const data = isJson ? await response.json() : null;
+  const data = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
-    throw createError(response.status, data?.detail || data?.message, data);
+    const message = typeof data === 'string' ? data || response.statusText : data?.detail || data?.message;
+    errorToast(message || 'Request failed');
+    throw createError(response.status, message, data);
   }
 
   return data;
@@ -98,6 +102,10 @@ export const api = {
     quotePayment: (token, id, payload) =>
       request(`/orders/${id}/payment/quote`, { method: 'POST', token, body: payload }),
     payOrder: (token, id, payload) => request(`/orders/${id}/pay`, { method: 'POST', token, body: payload }),
+    createRazorpayOrder: (token, id, payload) =>
+      request(`/orders/${id}/payment/razorpay/order`, { method: 'POST', token, body: payload }),
+    verifyRazorpayPayment: (token, id, payload) =>
+      request(`/orders/${id}/payment/razorpay/verify`, { method: 'POST', token, body: payload }),
   },
   coupons: {
     list: (token, query) => request('/coupons', { token, query }),

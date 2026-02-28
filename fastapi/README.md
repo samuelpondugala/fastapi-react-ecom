@@ -11,6 +11,7 @@ Production-oriented backend scaffold for your e-commerce project with:
 - Production middleware: security headers, optional trusted hosts, gzip, and HTTPS redirect
 - Test suite covering core success + failure scenarios (`tests/`)
 - Free built-in payment gateway flow with tax applied only at payment time
+- Checkout supports coupon codes and delivery charge policy (free >= INR 1000, else INR 100)
 - Companion React + Vite frontend in `../react` with storefront and admin panel
 
 Detailed cloud deployment runbook (Render + AWS) is available at:
@@ -128,7 +129,7 @@ const productsRes = await fetch(`${baseURL}/products`, {
 const products = await productsRes.json();
 ```
 
-### Payment flow (free gateways)
+### Payment flow (UPI/Card/EMI/Pay Later/COD + sandbox)
 
 1. Create order from cart:
 
@@ -152,17 +153,37 @@ Example pay request body:
 
 ```json
 {
-  "provider": "manual_free",
+  "provider": "razorpay_upi",
   "apply_tax": true,
   "tax_mode": "percent",
   "tax_value": "18.00"
 }
 ```
 
-Available free providers:
+Available providers:
 
+- `razorpay_upi`
+- `paytm_upi`
+- `razorpay_card`
+- `emi_plan`
+- `pay_later`
+- `cod`
 - `manual_free` (always succeeds, no external account needed)
 - `mock_free` (supports `simulate_failure=true` for testing failure handling)
+
+Real gateway credential placeholders in `.env`:
+
+- `RAZORPAY_KEY_ID`
+- `RAZORPAY_KEY_SECRET`
+- `RAZORPAY_WEBHOOK_SECRET`
+- `PAYTM_MERCHANT_ID`
+- `PAYTM_MERCHANT_KEY`
+
+Razorpay end-to-end endpoints:
+
+- `POST /api/v1/orders/{order_id}/payment/razorpay/order` (create Razorpay order)
+- `POST /api/v1/orders/{order_id}/payment/razorpay/verify` (signature verification + mark paid)
+- `POST /api/v1/orders/payment/razorpay/webhook` (server-side webhook callback)
 
 ### Product import (DummyJSON + manual JSON)
 
@@ -222,6 +243,8 @@ python manage.py check
 python manage.py revision -m "add new table" --autogenerate
 python manage.py upgrade head
 python manage.py downgrade -1
+python manage.py normalize-inr --dry-run
+python manage.py normalize-inr --rate 83
 ```
 
 ## API quick map

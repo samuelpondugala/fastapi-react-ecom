@@ -4,6 +4,7 @@ import { Link, useParams } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { formatDate, formatMoney } from '../lib/format';
+import { errorToast, successToast } from '../lib/toast';
 
 export default function ProductPage() {
   const { token } = useAuth();
@@ -91,12 +92,14 @@ export default function ProductPage() {
     if (!token) {
       setError('Please login to add this item to cart.');
       setSuccess('');
+      errorToast('Please login to add this item to cart.');
       return;
     }
 
     if (!selectedVariant) {
       setError('Please choose a valid variant.');
       setSuccess('');
+      errorToast('Please choose a valid variant.');
       return;
     }
 
@@ -104,6 +107,7 @@ export default function ProductPage() {
       await api.cart.addItem(token, { variant_id: selectedVariant.id, quantity });
       setError('');
       setSuccess('Item added to cart.');
+      successToast('Item added to cart.');
     } catch (err) {
       setSuccess('');
       setError(err.message || 'Could not add to cart.');
@@ -129,6 +133,7 @@ export default function ProductPage() {
       setReviewForm({ rating: 5, title: '', comment: '' });
       setError('');
       setSuccess('Review submitted successfully.');
+      successToast('Review submitted successfully.');
     } catch (err) {
       setSuccess('');
       setError(err.message || 'Review submit failed.');
@@ -151,7 +156,6 @@ export default function ProductPage() {
   return (
     <section className="section fade-in">
       {error && <div className="alert alert--error">{error}</div>}
-      {success && <div className="alert alert--success">{success}</div>}
 
       <div className="product-detail card">
         <div className="product-detail__media">
@@ -188,7 +192,7 @@ export default function ProductPage() {
           <h1>{product.name}</h1>
           <p className="muted">{product.description || 'No description available.'}</p>
           <p className="product-price">
-            {selectedVariant ? formatMoney(selectedVariant.price, selectedVariant.currency || 'USD') : 'N/A'}
+            {selectedVariant ? formatMoney(selectedVariant.price, selectedVariant.currency || 'INR') : 'N/A'}
           </p>
 
           <label>
@@ -200,7 +204,7 @@ export default function ProductPage() {
             >
               {product.variants?.map((variant) => (
                 <option key={variant.id} value={variant.id}>
-                  {variant.sku} | {formatMoney(variant.price, variant.currency || 'USD')}
+                  {variant.sku} | {formatMoney(variant.price, variant.currency || 'INR')}
                 </option>
               ))}
             </select>

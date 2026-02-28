@@ -31,11 +31,14 @@ def create_coupon(
     db: Session = Depends(get_db),
     _: User = Depends(get_admin_user),
 ) -> Coupon:
-    existing = db.scalar(select(Coupon).where(Coupon.code == payload.code))
+    normalized_code = payload.code.strip().upper()
+    existing = db.scalar(select(Coupon).where(Coupon.code == normalized_code))
     if existing:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Coupon code already exists")
 
-    coupon = Coupon(**payload.model_dump())
+    coupon_data = payload.model_dump()
+    coupon_data["code"] = normalized_code
+    coupon = Coupon(**coupon_data)
     db.add(coupon)
     db.commit()
     db.refresh(coupon)

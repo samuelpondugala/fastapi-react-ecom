@@ -99,7 +99,7 @@ export default function AdminProductsPage({ vendorMode = false }) {
             attributes_json: { source: 'admin-form' },
             price: form.price,
             compare_at_price: form.compare_at_price || null,
-            currency: 'USD',
+            currency: 'INR',
             weight: form.weight || null,
             is_active: true,
           },

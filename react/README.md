@@ -17,9 +17,10 @@ Stack:
   - Register/login
   - Browse catalog, filter/search products
   - Product details and reviews
-  - Cart and checkout
+  - Cart and 3-step checkout flow
   - Order history and order payment
   - Profile + addresses
+  - Global top overlay toasts for success/error feedback
 - Admin flows:
   - Dashboard metrics
   - Users list + inspect endpoint
@@ -27,7 +28,16 @@ Stack:
   - Product creation + status updates
   - Coupon creation
   - Order lookup + payment action
-- Payment flow supports free gateways (`manual_free`, `mock_free`) with tax only at payment step
+- Payment flow supports:
+  - UPI (`razorpay_upi`, `paytm_upi`)
+  - Credit/Debit (`razorpay_card`)
+  - EMI (`emi_plan`)
+  - Pay Later (`pay_later`)
+  - COD (`cod`)
+  - Sandbox (`manual_free`, `mock_free`)
+- Delivery policy in checkout: `< INR 1000` adds `INR 100`, else free
+- Prices rendered in INR; timestamps rendered in IST
+- For `razorpay_upi` / `razorpay_card`, frontend opens Razorpay Checkout popup and verifies signature through backend before marking order paid
 
 ## Route Map
 

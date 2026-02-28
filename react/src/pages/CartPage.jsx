@@ -4,6 +4,7 @@ import { Link } from 'react-router-dom';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
 import { formatMoney } from '../lib/format';
+import { successToast } from '../lib/toast';
 
 export default function CartPage() {
   const { token } = useAuth();
@@ -32,6 +33,7 @@ export default function CartPage() {
     try {
       await api.cart.updateItem(token, itemId, { quantity: Math.max(1, quantity) });
       await loadCart();
+      successToast('Cart updated.');
     } catch (err) {
       setError(err.message || 'Could not update quantity.');
     }
@@ -41,6 +43,7 @@ export default function CartPage() {
     try {
       await api.cart.removeItem(token, itemId);
       await loadCart();
+      successToast('Item removed from cart.');
     } catch (err) {
       setError(err.message || 'Could not remove item.');
     }
@@ -50,6 +53,7 @@ export default function CartPage() {
     try {
       await api.cart.clearMine(token);
       await loadCart();
+      successToast('Cart cleared.');
     } catch (err) {
       setError(err.message || 'Could not clear cart.');
     }

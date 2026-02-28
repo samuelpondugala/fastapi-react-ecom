@@ -1,4 +1,6 @@
-from fastapi import APIRouter, Depends, HTTPException, status
+import json
+
+from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
 from sqlalchemy import select
 from sqlalchemy.orm import Session, selectinload
 
@@ -8,9 +10,24 @@ from app.models.order import Order, OrderItem
 from app.models.product import Product, ProductVariant
 from app.models.user import User
 from app.schemas.order import CheckoutRequest, OrderRead
-from app.schemas.payment import OrderPaymentRequest, OrderPaymentResult, PaymentGatewayRead, PaymentQuoteRead
+from app.schemas.payment import (
+    OrderPaymentRequest,
+    OrderPaymentResult,
+    PaymentGatewayRead,
+    PaymentQuoteRead,
+    RazorpayOrderCreateRead,
+    RazorpayOrderCreateRequest,
+    RazorpayPaymentVerifyRequest,
+)
 from app.services.order import create_order_from_active_cart
-from app.services.payment import FREE_PAYMENT_GATEWAYS, build_payment_quote, process_order_payment
+from app.services.payment import (
+    FREE_PAYMENT_GATEWAYS,
+    build_payment_quote,
+    create_razorpay_checkout_order,
+    process_order_payment,
+    process_razorpay_webhook_payload,
+    verify_and_record_razorpay_payment,
+)
 
 router = APIRouter()
 
@@ -42,7 +59,8 @@ def _get_order_or_404(db: Session, order_id: int) -> Order:
     summary="Create order from active cart",
     description=(
         "Converts the active cart into an order. "
-        "Taxes are not applied at checkout; they are applied at payment time."
+        "Taxes are not applied at checkout; they are applied at payment time. "
+        "Delivery is free for subtotal >= 1000, else 100 is applied."
     ),
 )
 def checkout(
@@ -57,6 +75,7 @@ def checkout(
         billing_address_id=payload.billing_address_id,
         shipping_total=payload.shipping_total,
         tax_total=payload.tax_total,
+        coupon_code=payload.coupon_code,
     )
     db.commit()
     return db.scalar(select(Order).options(ORDER_DETAIL_LOAD).where(Order.id == order.id))
@@ -83,8 +102,8 @@ def list_my_orders(
 @router.get(
     "/payment-gateways/free",
     response_model=list[PaymentGatewayRead],
-    summary="List free payment gateway options",
-    description="Returns built-in free gateway options. No mandatory third-party payment account is required.",
+    summary="List payment gateway options",
+    description="Returns payment options including UPI, card, EMI, pay later, and COD.",
 )
 def list_free_gateways() -> list[PaymentGatewayRead]:
     return [PaymentGatewayRead(**gateway) for gateway in FREE_PAYMENT_GATEWAYS]
@@ -127,6 +146,89 @@ def get_order(
     order = _get_order_or_404(db, order_id)
     _authorize_order_access(order, current_user)
     return order
+
+
+@router.post(
+    "/{order_id}/payment/razorpay/order",
+    response_model=RazorpayOrderCreateRead,
+    summary="Create Razorpay checkout order",
+)
+def create_razorpay_order(
+    order_id: int,
+    payload: RazorpayOrderCreateRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> RazorpayOrderCreateRead:
+    order = _get_order_or_404(db, order_id)
+    _authorize_order_access(order, current_user)
+    checkout_order = create_razorpay_checkout_order(
+        order,
+        provider=payload.provider,
+        metadata=payload.metadata,
+    )
+    return RazorpayOrderCreateRead(**checkout_order)
+
+
+@router.post(
+    "/{order_id}/payment/razorpay/verify",
+    response_model=OrderPaymentResult,
+    summary="Verify Razorpay payment signature and mark order paid",
+)
+def verify_razorpay_payment(
+    order_id: int,
+    payload: RazorpayPaymentVerifyRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> OrderPaymentResult:
+    order = _get_order_or_404(db, order_id)
+    _authorize_order_access(order, current_user)
+    payment, order, quote = verify_and_record_razorpay_payment(
+        db=db,
+        order=order,
+        provider=payload.provider,
+        razorpay_order_id=payload.razorpay_order_id,
+        razorpay_payment_id=payload.razorpay_payment_id,
+        razorpay_signature=payload.razorpay_signature,
+        metadata=payload.metadata,
+    )
+    db.commit()
+
+    return OrderPaymentResult(
+        order=OrderRead.model_validate(order),
+        payment=payment,
+        quote=PaymentQuoteRead(
+            base_amount=quote.base_amount,
+            tax_amount=quote.tax_amount,
+            gateway_fee=quote.gateway_fee,
+            total_amount=quote.total_amount,
+        ),
+    )
+
+
+@router.post(
+    "/payment/razorpay/webhook",
+    summary="Razorpay webhook callback",
+    description="Verifies Razorpay webhook signature and updates order payment state.",
+)
+async def razorpay_webhook(
+    request: Request,
+    x_razorpay_signature: str | None = Header(default=None, alias="X-Razorpay-Signature"),
+    db: Session = Depends(get_db),
+) -> dict[str, object]:
+    raw_body = await request.body()
+    try:
+        payload = json.loads(raw_body.decode("utf-8")) if raw_body else {}
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid webhook JSON payload") from exc
+
+    result = process_razorpay_webhook_payload(
+        db=db,
+        raw_body=raw_body,
+        signature=x_razorpay_signature,
+        payload=payload,
+    )
+    db.commit()
+    return result
 
 
 @router.post(

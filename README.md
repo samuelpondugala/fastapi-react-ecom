@@ -69,9 +69,24 @@ Vendor product studio URL:
 
 ## Payment Behavior
 
-- Free gateway options: `manual_free`, `mock_free`
-- No mandatory paid payment provider account required
+- Payment modes supported in flow:
+  - UPI (`razorpay_upi`, `paytm_upi`)
+  - Credit/Debit Cards (`razorpay_card`)
+  - EMI (`emi_plan`)
+  - Pay Later (`pay_later`)
+  - COD (`cod`)
+- Sandbox/testing modes still available: `manual_free`, `mock_free`
+- Checkout delivery policy:
+  - Subtotal `< INR 1000` -> delivery charge `INR 100`
+  - Subtotal `>= INR 1000` -> free delivery
+- Coupon can be applied in checkout and is persisted in backend order totals
 - Tax is applied only at payment step (`POST /orders/{id}/pay`)
+- Money display is standardized to INR and timestamps are shown in IST on frontend
+- Real Razorpay flow is wired:
+  - create checkout order
+  - open Razorpay popup from frontend
+  - verify payment signature on backend
+  - optional webhook callback endpoint for server-side reconciliation
 
 ## Dummy Data Import
 
@@ -87,6 +102,8 @@ cd fastapi
 source .venv/bin/activate
 python manage.py import-products --from-dummyjson --limit 20 --skip 0
 python manage.py import-products --file sample_dummyjson_products.json
+python manage.py normalize-inr --dry-run
+python manage.py normalize-inr --rate 83
 ```
 
 Import from frontend:
@@ -100,3 +117,9 @@ Import from frontend:
 - Backend setup and API details: `fastapi/README.md`
 - Frontend setup and route coverage: `react/README.md`
 - Cloud deployment (Render + AWS): `DEPLOYMENT_GUIDE_RENDER_AWS.md`
+
+## Hosting Note (GitHub Pages)
+
+- You can deploy the React frontend to GitHub Pages.
+- You cannot run FastAPI backend on GitHub Pages (static-only hosting).
+- Deploy backend to Render/AWS/Railway/Fly.io and set `VITE_API_BASE_URL` to that backend URL.

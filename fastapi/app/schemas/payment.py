@@ -14,14 +14,25 @@ class PaymentGatewayRead(BaseModel):
     description: str
     requires_external_account: bool = False
     gateway_fee_note: str = "No gateway fee"
+    methods: list[str] = Field(default_factory=list)
+    category: str = "online"
 
 
 class OrderPaymentRequest(BaseModel):
-    provider: Literal["manual_free", "mock_free"] = Field(
-        default="manual_free",
-        description="Free payment gateway option.",
+    provider: Literal[
+        "manual_free",
+        "mock_free",
+        "razorpay_upi",
+        "razorpay_card",
+        "paytm_upi",
+        "emi_plan",
+        "pay_later",
+        "cod",
+    ] = Field(
+        default="razorpay_upi",
+        description="Payment gateway option.",
     )
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    currency: str = Field(default="INR", min_length=3, max_length=3)
 
     apply_tax: bool = Field(
         default=False,
@@ -54,6 +65,33 @@ class OrderPaymentRequest(BaseModel):
             raise ValueError("tax_mode must be fixed or percent when apply_tax=true")
 
         return self
+
+
+class RazorpayOrderCreateRequest(BaseModel):
+    provider: Literal["razorpay_upi", "razorpay_card"] = Field(
+        default="razorpay_upi",
+        description="Razorpay checkout mode.",
+    )
+    metadata: dict = Field(default_factory=dict)
+
+
+class RazorpayOrderCreateRead(BaseModel):
+    key_id: str
+    provider: str
+    internal_order_id: int
+    order_number: str
+    razorpay_order_id: str
+    amount: int
+    currency: str
+    status: str
+
+
+class RazorpayPaymentVerifyRequest(BaseModel):
+    provider: Literal["razorpay_upi", "razorpay_card"] = Field(default="razorpay_upi")
+    razorpay_order_id: str = Field(min_length=6, max_length=128)
+    razorpay_payment_id: str = Field(min_length=6, max_length=128)
+    razorpay_signature: str = Field(min_length=32, max_length=256)
+    metadata: dict = Field(default_factory=dict)
 
 
 class PaymentRead(ORMModel):

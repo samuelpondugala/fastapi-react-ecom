@@ -64,7 +64,7 @@ def test_create_product_duplicate_slug_fails(client: TestClient, admin_auth_head
                     "sku": "SKU-2",
                     "attributes_json": {"color": "blue"},
                     "price": "899.99",
-                    "currency": "USD",
+                    "currency": "INR",
                     "is_active": True,
                 }
             ],
@@ -94,7 +94,7 @@ def test_create_product_duplicate_sku_fails(client: TestClient, admin_auth_heade
                     "sku": "SKU-SHARED",
                     "attributes_json": {"size": "10in"},
                     "price": "499.99",
-                    "currency": "USD",
+                    "currency": "INR",
                     "is_active": True,
                 }
             ],

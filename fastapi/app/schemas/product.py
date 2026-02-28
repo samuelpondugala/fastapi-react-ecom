@@ -27,7 +27,7 @@ class ProductVariantBase(BaseModel):
     attributes_json: dict = Field(default_factory=dict)
     price: Decimal = Field(gt=0)
     compare_at_price: Decimal | None = None
-    currency: str = Field(default="USD", min_length=3, max_length=3)
+    currency: str = Field(default="INR", min_length=3, max_length=3)
     weight: Decimal | None = None
     is_active: bool = True
 

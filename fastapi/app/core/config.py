@@ -18,6 +18,11 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_RECYCLE_SECONDS: int = 1800
 
+    APP_CURRENCY: str = "INR"
+    USD_TO_INR_RATE: float = 83.0
+    FREE_DELIVERY_THRESHOLD: float = 1000.0
+    DELIVERY_CHARGE: float = 100.0
+
     CORS_ORIGINS: Annotated[list[str], NoDecode] = [
         "http://localhost:3000",
         "http://127.0.0.1:3000",
@@ -44,6 +49,12 @@ class Settings(BaseSettings):
     DEMO_VENDOR_USERNAME: str = "ecomvendor"
     DEMO_VENDOR_EMAIL: str = "ecomvendor@example.com"
     DEMO_VENDOR_PASSWORD: str = "ecom@123vendor"
+
+    RAZORPAY_KEY_ID: str | None = None
+    RAZORPAY_KEY_SECRET: str | None = None
+    RAZORPAY_WEBHOOK_SECRET: str | None = None
+    PAYTM_MERCHANT_ID: str | None = None
+    PAYTM_MERCHANT_KEY: str | None = None
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod

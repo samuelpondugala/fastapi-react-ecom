@@ -5,6 +5,7 @@ import ProductCard from '../components/ProductCard';
 import StatusPill from '../components/StatusPill';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
+import { errorToast, successToast } from '../lib/toast';
 
 export default function HomePage() {
   const { token } = useAuth();
@@ -12,7 +13,6 @@ export default function HomePage() {
   const [products, setProducts] = useState([]);
   const [apiStatus, setApiStatus] = useState({ health: 'unknown', ready: 'unknown' });
   const [error, setError] = useState('');
-  const [success, setSuccess] = useState('');
 
   useEffect(() => {
     let ignore = false;
@@ -51,41 +51,28 @@ export default function HomePage() {
     };
   }, []);
 
-  useEffect(() => {
-    if (!success) return undefined;
-    const timeout = window.setTimeout(() => setSuccess(''), 2600);
-    return () => window.clearTimeout(timeout);
-  }, [success]);
-
   async function addToCart(variant) {
     if (!variant) {
       setError('This product variant is not available.');
-      setSuccess('');
+      errorToast('This product variant is not available.');
       return;
     }
     if (!token) {
       setError('Please login to add items to cart.');
-      setSuccess('');
+      errorToast('Please login to add items to cart.');
       return;
     }
     try {
       await api.cart.addItem(token, { variant_id: variant.id, quantity: 1 });
       setError('');
-      setSuccess('Item added to cart.');
+      successToast('Item added to cart.');
     } catch (err) {
-      setSuccess('');
       setError(err.message || 'Could not add item to cart.');
     }
   }
 
   return (
     <>
-      {success && (
-        <div className="toast-banner toast-banner--success" role="status" aria-live="polite">
-          {success}
-        </div>
-      )}
-
       <section className="hero">
         <div>
           <p className="eyebrow">FastAPI + React + Admin</p>

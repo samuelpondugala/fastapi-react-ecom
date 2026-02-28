@@ -14,6 +14,8 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.category import Category
 from app.models.product import Product, ProductImage, ProductVariant
 
+USD_TO_INR_RATE = Decimal("83.00")
+
 
 @dataclass
 class NormalizedProduct:
@@ -130,10 +132,10 @@ def _normalize_product(
     if not sku:
         sku = f"IMP-{_slugify(name).upper()[:30]}-{index:04d}"
 
-    price = _to_decimal(item.get("price"))
-    if price <= Decimal("0.00"):
+    usd_price = _to_decimal(item.get("price"))
+    if usd_price <= Decimal("0.00"):
         raise ValueError("price must be > 0")
-    price = _money(price)
+    price = _money(usd_price * USD_TO_INR_RATE)
 
     discount = _to_decimal(item.get("discountPercentage") or 0)
     compare_at_price = None
@@ -152,6 +154,8 @@ def _normalize_product(
         {
             "source": source,
             "source_id": item.get("id"),
+            "source_price_usd": str(_money(usd_price)),
+            "usd_to_inr_rate": str(USD_TO_INR_RATE),
             "rating": item.get("rating"),
             "stock": item.get("stock"),
             "tags": item.get("tags"),
@@ -173,7 +177,7 @@ def _normalize_product(
         sku=sku,
         price=price,
         compare_at_price=compare_at_price,
-        currency="USD",
+        currency="INR",
         weight=weight,
         images=images,
         attributes=attributes,

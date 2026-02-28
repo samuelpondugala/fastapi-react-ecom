@@ -9,6 +9,12 @@ from app.schemas.common import ORMModel
 class CheckoutRequest(BaseModel):
     shipping_address_id: int | None = None
     billing_address_id: int | None = None
+    coupon_code: str | None = Field(
+        default=None,
+        min_length=2,
+        max_length=64,
+        description="Optional coupon code to apply at checkout.",
+    )
     shipping_total: Decimal = Field(default=0, ge=0)
     tax_total: Decimal = Field(
         default=0,

@@ -22,7 +22,7 @@ For both platforms, the production architecture is:
 4. Environment variables for secrets/config
 5. Health checks (`/api/v1/health/ready`)
 6. HTTPS endpoints for frontend and backend domains
-7. Built-in free payment gateways (`manual_free`, `mock_free`) with tax applied at payment stage
+7. Payment modes in flow: UPI, Cards, EMI, Pay Later, COD (plus sandbox providers)
 
 Important notes:
 
@@ -99,6 +99,13 @@ SEED_DEMO_USERS=false
 
 # Frontend build env (React)
 VITE_API_BASE_URL=https://api.example.com/api/v1
+
+# Optional real payment credentials
+RAZORPAY_KEY_ID=rzp_live_xxx
+RAZORPAY_KEY_SECRET=xxx
+RAZORPAY_WEBHOOK_SECRET=whsec_xxx
+PAYTM_MERCHANT_ID=xxx
+PAYTM_MERCHANT_KEY=xxx
 ```
 
 Generate secure values:
@@ -617,3 +624,36 @@ AWS:
 - https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html
 - https://docs.aws.amazon.com/amplify/latest/userguide/welcome.html
 - https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html
+
+## Stage R10: Real payment gateway wiring checklist (Razorpay / Paytm)
+
+1. Create production merchant accounts with Razorpay and/or Paytm.
+2. Generate live API credentials from each dashboard.
+3. Set credentials as environment variables in backend service:
+   - `RAZORPAY_KEY_ID`
+   - `RAZORPAY_KEY_SECRET`
+   - `RAZORPAY_WEBHOOK_SECRET`
+   - `PAYTM_MERCHANT_ID`
+   - `PAYTM_MERCHANT_KEY`
+4. Keep sandbox providers enabled in lower environments for QA (`manual_free`, `mock_free`).
+5. Validate critical flows in staging:
+   - UPI success/failure
+   - Card success/failure
+   - COD placement
+   - refund/cancel webhooks (if enabled in your gateway setup)
+
+Razorpay webhook URL to configure in dashboard:
+
+- `https://<your-backend-domain>/api/v1/orders/payment/razorpay/webhook`
+
+Current codebase exposes gateway choices and payment-mode UX. You should connect provider SDK/API calls in backend payment service before accepting live transactions.
+
+## Stage R11: Can I deploy on GitHub Pages?
+
+- React frontend: yes (static build only).
+- FastAPI backend: no (GitHub Pages cannot run server-side Python apps).
+- Recommended setup:
+  1. Deploy backend on Render/AWS.
+  2. Deploy frontend on GitHub Pages/Render Static.
+  3. Set `VITE_API_BASE_URL` to deployed backend URL.
+  4. Add frontend domain in backend `CORS_ORIGINS`.
