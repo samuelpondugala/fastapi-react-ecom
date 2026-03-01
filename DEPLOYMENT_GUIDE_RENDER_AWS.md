@@ -194,6 +194,26 @@ RUN_DB_MIGRATIONS=true
 RUN_SEED=false
 ```
 
+Default account controls (backend):
+
+```env
+DEFAULT_ADMIN_EMAIL=admin@example.com
+DEFAULT_ADMIN_PASSWORD=your-admin-password
+SEED_DEMO_USERS=true
+DEMO_ADMIN_USERNAME=ecomadmin
+DEMO_ADMIN_EMAIL=ecomadmin@example.com
+DEMO_ADMIN_PASSWORD=ecom@123admin
+DEMO_VENDOR_USERNAME=ecomvendor
+DEMO_VENDOR_EMAIL=ecomvendor@example.com
+DEMO_VENDOR_PASSWORD=ecom@123vendor
+```
+
+Important:
+
+1. `RUN_SEED` must be `true` at least once to create/update these users.
+2. Login "username" is resolved from email local-part (for example `ecomadmin` from `ecomadmin@example.com`), so keep demo username consistent with demo email prefix.
+3. After seeding successfully, set `RUN_SEED=false` and redeploy.
+
 Optional:
 
 ```env
