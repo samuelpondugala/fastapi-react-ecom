@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Annotated
+from urllib.parse import urlsplit
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -66,9 +67,38 @@ class Settings(BaseSettings):
     @field_validator("ALLOWED_HOSTS", mode="before")
     @classmethod
     def parse_allowed_hosts(cls, value: str | list[str]) -> list[str]:
-        if isinstance(value, str):
-            return [host.strip() for host in value.split(",") if host.strip()]
-        return value
+        def normalize_host(raw_host: str) -> str:
+            host = raw_host.strip()
+            if not host:
+                return ""
+            if host == "*":
+                return host
+
+            # Accept URL-like inputs (e.g. https://api.example.com/) and normalize to host only.
+            if "://" in host:
+                parsed = urlsplit(host)
+                host = parsed.netloc or parsed.path
+
+            # Strip any accidental path suffix and credentials.
+            host = host.split("/", 1)[0]
+            if "@" in host:
+                host = host.rsplit("@", 1)[-1]
+
+            # Strip :port for standard hostnames while preserving wildcard host patterns.
+            if host.count(":") == 1 and not host.startswith("*."):
+                maybe_host, maybe_port = host.rsplit(":", 1)
+                if maybe_port.isdigit():
+                    host = maybe_host
+
+            return host.lower().strip()
+
+        hosts = value.split(",") if isinstance(value, str) else value
+        normalized: list[str] = []
+        for item in hosts:
+            normalized_item = normalize_host(item)
+            if normalized_item and normalized_item not in normalized:
+                normalized.append(normalized_item)
+        return normalized
 
     @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":
