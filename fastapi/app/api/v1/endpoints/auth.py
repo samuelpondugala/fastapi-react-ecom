@@ -47,6 +47,8 @@ def login(payload: LoginRequest, db: Session = Depends(get_db)) -> TokenResponse
                 or_(
                     User.email == identity,
                     User.email.ilike(f"{identity}@%"),
+                    # Seeded demo users store "username" in full_name for convenience.
+                    User.full_name.ilike(identity),
                 )
             )
         )

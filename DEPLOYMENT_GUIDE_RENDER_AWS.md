@@ -95,6 +95,7 @@ CORS_ORIGINS=https://your-frontend-domain.com
 UVICORN_WORKERS=2
 RUN_DB_MIGRATIONS=true
 RUN_SEED=false
+AUTO_BOOTSTRAP_STAFF=true
 SEED_DEMO_USERS=false
 
 # Frontend build env (React)
@@ -192,6 +193,7 @@ CORS_ORIGINS=https://your-frontend-domain.com
 UVICORN_WORKERS=2
 RUN_DB_MIGRATIONS=true
 RUN_SEED=false
+AUTO_BOOTSTRAP_STAFF=true
 ```
 
 Default account controls (backend):
@@ -212,7 +214,8 @@ Important:
 
 1. `RUN_SEED` must be `true` at least once to create/update these users.
 2. Login "username" is resolved from email local-part (for example `ecomadmin` from `ecomadmin@example.com`), so keep demo username consistent with demo email prefix.
-3. After seeding successfully, set `RUN_SEED=false` and redeploy.
+3. `AUTO_BOOTSTRAP_STAFF=true` automatically seeds only if no admin/vendor exists yet (safe default for first deploy).
+4. After explicit one-time seeding, keep `RUN_SEED=false` unless you intentionally want to rotate seed credentials from env.
 
 Optional:
 

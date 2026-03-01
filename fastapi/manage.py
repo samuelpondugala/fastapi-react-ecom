@@ -98,6 +98,42 @@ def cmd_seed(_: argparse.Namespace) -> None:
         )
 
 
+def cmd_seed_if_needed(_: argparse.Namespace) -> None:
+    from sqlalchemy import select
+
+    from app.core.config import get_settings
+    from app.db.init_db import ensure_default_admin, ensure_demo_users
+    from app.db.session import SessionLocal
+    from app.models.user import User
+
+    settings = get_settings()
+    with SessionLocal() as db:
+        has_staff = db.scalar(select(User.id).where(User.role.in_(["admin", "vendor"])).limit(1))
+        if has_staff is not None:
+            print("Seed skipped: staff user already exists")
+            return
+
+        created_default = ensure_default_admin(db)
+        demo_status = ensure_demo_users(db)
+
+    print("Bootstrap seed applied")
+    if created_default:
+        print("Default admin created")
+    else:
+        print("Default admin already exists")
+    if settings.SEED_DEMO_USERS:
+        print(
+            "Demo admin:",
+            "created" if demo_status["demo_admin"] else "already exists",
+            f"(username={settings.DEMO_ADMIN_USERNAME}, email={settings.DEMO_ADMIN_EMAIL})",
+        )
+        print(
+            "Demo vendor:",
+            "created" if demo_status["demo_vendor"] else "already exists",
+            f"(username={settings.DEMO_VENDOR_USERNAME}, email={settings.DEMO_VENDOR_EMAIL})",
+        )
+
+
 def cmd_check(_: argparse.Namespace) -> None:
     from sqlalchemy import text
 
@@ -255,6 +291,12 @@ def build_parser() -> argparse.ArgumentParser:
 
     seed_parser = subparsers.add_parser("seed", help="Seed default admin user")
     seed_parser.set_defaults(func=cmd_seed)
+
+    seed_if_needed_parser = subparsers.add_parser(
+        "seed-if-needed",
+        help="Seed default staff accounts only when no admin/vendor exists",
+    )
+    seed_if_needed_parser.set_defaults(func=cmd_seed_if_needed)
 
     check_parser = subparsers.add_parser("check", help="Validate config and DB connectivity")
     check_parser.set_defaults(func=cmd_check)

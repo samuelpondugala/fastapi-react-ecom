@@ -236,6 +236,8 @@ docker run --rm -p 8000:8000 --env-file .env ecom-api
 
 `docker-entrypoint.sh` automatically runs migrations by default (`RUN_DB_MIGRATIONS=true`).
 
+It also bootstraps staff accounts by default when no admin/vendor exists (`AUTO_BOOTSTRAP_STAFF=true`), and supports explicit seed runs with `RUN_SEED=true`.
+
 ## 8) Common commands
 
 ```bash
