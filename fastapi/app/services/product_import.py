@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -38,8 +39,20 @@ def fetch_dummyjson_products(*, limit: int, skip: int) -> list[dict[str, Any]]:
     query = urlencode({"limit": limit, "skip": skip})
     url = f"https://dummyjson.com/products?{query}"
     request = Request(url, headers={"User-Agent": "ecom-fastapi-importer/1.0"})
-    with urlopen(request, timeout=20) as response:  # noqa: S310
-        payload = json.loads(response.read().decode("utf-8"))
+    try:
+        with urlopen(request, timeout=20) as response:  # noqa: S310
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        raw_body = exc.read().decode("utf-8", errors="replace").strip()
+        body_preview = re.sub(r"\s+", " ", raw_body)[:300]
+        details = f"HTTP {exc.code} while calling {url}"
+        if body_preview:
+            details = f"{details}: {body_preview}"
+        raise RuntimeError(details) from exc
+    except URLError as exc:
+        raise RuntimeError(f"Network error while calling {url}: {exc.reason}") from exc
+    except TimeoutError as exc:
+        raise RuntimeError(f"Timeout while calling {url}") from exc
 
     products = payload.get("products", [])
     if not isinstance(products, list):

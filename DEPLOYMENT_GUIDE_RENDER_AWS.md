@@ -577,6 +577,41 @@ Cause: frontend domain missing in `CORS_ORIGINS`.
 
 Fix: add exact frontend origin (including `https://`).
 
+### Failure: blank white page on refresh + `index-*.js` 404
+
+Cause: frontend static hosting is not serving SPA routes/assets correctly (usually wrong publish directory, missing rewrite, or stale cached build artifacts).
+
+Fix (Render Static Site):
+
+1. Root directory must be `react`.
+2. Build command must be `npm ci && npm run build`.
+3. Publish directory must be `dist`.
+4. Add rewrite rule `/* -> /index.html` with action `Rewrite`.
+5. Clear build cache and redeploy once.
+6. Do a hard refresh in browser after deploy.
+
+Also ensure frontend env is set at build time:
+
+```env
+VITE_API_BASE_URL=https://your-backend-domain/api/v1
+```
+
+### Failure: DummyJSON import fails from admin/vendor page
+
+Cause patterns:
+
+1. User is not `admin` or `vendor` (endpoint is staff-only).
+2. Backend cannot reach `https://dummyjson.com` from runtime network/TLS.
+3. Frontend calls wrong backend URL (`VITE_API_BASE_URL` mismatch).
+
+Fix:
+
+1. Confirm login user role is `admin` or `vendor`.
+2. Confirm backend env includes correct CORS origin for frontend domain:
+   `CORS_ORIGINS=https://your-frontend-domain`.
+3. Open backend logs while triggering import; API now returns detailed upstream errors (HTTP code/network/timeout).
+4. Redeploy backend after Docker image update (includes CA certificates for outbound HTTPS).
+
 ### Failure: DB connection refused
 
 Cause: wrong `DATABASE_URL` or network path blocked.
