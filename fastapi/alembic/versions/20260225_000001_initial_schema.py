@@ -27,7 +27,7 @@ def upgrade() -> None:
         sa.Column("password_hash", sa.String(length=255), nullable=False),
         sa.Column("full_name", sa.String(length=255), nullable=True),
         sa.Column("role", sa.String(length=32), nullable=False, server_default="customer"),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
     )
@@ -41,7 +41,7 @@ def upgrade() -> None:
         sa.Column("name", sa.String(length=120), nullable=False),
         sa.Column("slug", sa.String(length=140), nullable=False),
         sa.Column("description", sa.Text(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
     )
     op.create_index("ix_categories_id", "categories", ["id"], unique=False)
@@ -59,7 +59,7 @@ def upgrade() -> None:
         sa.Column("state", sa.String(length=100), nullable=False),
         sa.Column("postal_code", sa.String(length=20), nullable=False),
         sa.Column("country", sa.String(length=100), nullable=False),
-        sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_default", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
     )
     op.create_index("ix_addresses_id", "addresses", ["id"], unique=False)
@@ -105,7 +105,7 @@ def upgrade() -> None:
         sa.Column("starts_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("expires_at", sa.DateTime(timezone=True), nullable=True),
         sa.Column("usage_limit", sa.Integer(), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
     )
     op.create_index("ix_coupons_id", "coupons", ["id"], unique=False)
     op.create_index("ix_coupons_code", "coupons", ["code"], unique=True)
@@ -117,7 +117,7 @@ def upgrade() -> None:
         sa.Column("image_url", sa.String(length=500), nullable=False),
         sa.Column("alt_text", sa.String(length=255), nullable=True),
         sa.Column("sort_order", sa.Integer(), nullable=False, server_default="0"),
-        sa.Column("is_primary", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_primary", sa.Boolean(), nullable=False, server_default=sa.text("false")),
     )
     op.create_index("ix_product_images_id", "product_images", ["id"], unique=False)
     op.create_index("ix_product_images_product_id", "product_images", ["product_id"], unique=False)
@@ -132,7 +132,7 @@ def upgrade() -> None:
         sa.Column("compare_at_price", sa.Numeric(12, 2), nullable=True),
         sa.Column("currency", sa.String(length=3), nullable=False, server_default="USD"),
         sa.Column("weight", sa.Numeric(10, 3), nullable=True),
-        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("1")),
+        sa.Column("is_active", sa.Boolean(), nullable=False, server_default=sa.text("true")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
     )
     op.create_index("ix_product_variants_id", "product_variants", ["id"], unique=False)
@@ -256,7 +256,7 @@ def upgrade() -> None:
         sa.Column("rating", sa.Integer(), nullable=False),
         sa.Column("title", sa.String(length=255), nullable=True),
         sa.Column("comment", sa.Text(), nullable=True),
-        sa.Column("is_verified_purchase", sa.Boolean(), nullable=False, server_default=sa.text("0")),
+        sa.Column("is_verified_purchase", sa.Boolean(), nullable=False, server_default=sa.text("false")),
         sa.Column("created_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.Column("updated_at", sa.DateTime(timezone=True), nullable=False, server_default=sa.text("CURRENT_TIMESTAMP")),
         sa.CheckConstraint("rating >= 1 AND rating <= 5", name="ck_reviews_rating_1_5"),
