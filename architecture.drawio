@@ -1,0 +1,230 @@
+<mxfile host="app.diagrams.net" modified="2026-03-01T00:00:00.000Z" agent="Codex" version="22.1.16" type="device">
+  <diagram id="ecom-architecture" name="Ecom Architecture">
+    <mxGraphModel dx="1720" dy="980" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2200" pageHeight="1400" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="title" value="&lt;b&gt;Ecom Full-Stack System Architecture&lt;/b&gt;&lt;br&gt;FastAPI + React + SQLAlchemy + Alembic + Render/AWS" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#E0F2FE;strokeColor=#0369A1;fontSize=16;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="640" y="20" width="900" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="layer_clients" value="Client Layer" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#94A3B8;fontSize=13;fontStyle=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="30" y="130" width="360" height="470" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="customer" value="Customer" style="shape=mxgraph.basic.user;html=1;strokeColor=#334155;fillColor=#DBEAFE;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="70" y="200" width="70" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="vendor" value="Vendor" style="shape=mxgraph.basic.user;html=1;strokeColor=#334155;fillColor=#DCFCE7;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="170" y="200" width="70" height="90" as="geometry"/>
+        </mxCell>
+        <mxCell id="admin" value="Admin" style="shape=mxgraph.basic.user;html=1;strokeColor=#334155;fillColor=#FEE2E2;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="270" y="200" width="70" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="browser" value="Browser / SPA Runtime&lt;br&gt;JWT in localStorage" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0F172A;fillColor=#E2E8F0;fontSize=12;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="80" y="360" width="260" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="layer_frontend" value="Frontend Layer (Render Static Site or S3+CloudFront)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FFF7ED;strokeColor=#EA580C;fontSize=13;fontStyle=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="430" y="130" width="520" height="470" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_app" value="React + Vite App&lt;br&gt;[App.jsx + route tree]" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#9A3412;fillColor=#FFEDD5;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="470" y="180" width="220" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="auth_ctx" value="AuthContext&lt;br&gt;login/register/me hydration&lt;br&gt;role flags: customer/vendor/admin" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#9A3412;fillColor=#FED7AA;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="720" y="180" width="200" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="routing" value="Routing &amp;amp;amp; Access Control&lt;br&gt;ProtectedRoute + AdminShell + Vendor/Admin pages" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#9A3412;fillColor=#FED7AA;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="470" y="320" width="220" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="api_client" value="API Client (src/lib/api.js)&lt;br&gt;VITE_API_BASE_URL + fetch wrapper + global error toasts" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#9A3412;fillColor=#FED7AA;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="720" y="320" width="200" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="ux" value="UI Utilities&lt;br&gt;formatMoney/formatDate (INR/IST), toast bus, theme" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#9A3412;fillColor=#FFEDD5;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="470" y="470" width="450" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="layer_backend" value="Backend Layer (FastAPI Docker Service)" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#ECFDF5;strokeColor=#15803D;fontSize=13;fontStyle=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="990" y="130" width="650" height="650" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="api_entry" value="FastAPI Entry (app/main.py)&lt;br&gt;Middleware: CORS, TrustedHost, GZip, HTTPSRedirect, SecurityHeaders" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#166534;fillColor=#D1FAE5;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="180" width="590" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="api_router" value="API Routers (/api/v1)&lt;br&gt;health, auth, users, addresses, categories, products, cart, orders, coupons, reviews" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#166534;fillColor=#BBF7D0;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="290" width="590" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="service_layer" value="Service Layer&lt;br&gt;cart.py, order.py, payment.py, product_import.py" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#166534;fillColor=#86EFAC;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="400" width="280" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="auth_layer" value="Security &amp;amp;amp; Auth&lt;br&gt;JWT issue/verify, password hashing, role guards (admin/staff/current)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#166534;fillColor=#86EFAC;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1340" y="400" width="280" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="data_layer" value="Data Layer&lt;br&gt;SQLAlchemy models + SessionLocal + Alembic migrations" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#166534;fillColor=#86EFAC;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="530" width="590" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="runtime_ops" value="Runtime Ops&lt;br&gt;docker-entrypoint: upgrade head, seed-if-needed, optional seed&lt;br&gt;manage.py commands for check/migrate/seed/import/normalize" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#166534;fillColor=#D1FAE5;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1030" y="640" width="590" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="layer_data" value="Data Stores" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#EEF2FF;strokeColor=#4338CA;fontSize=13;fontStyle=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="1670" y="130" width="490" height="310" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="db" value="Primary DB&lt;br&gt;PostgreSQL (prod) / SQLite (dev/test)&lt;br&gt;Entities: users, catalog, cart, orders, payments, coupons, reviews" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;strokeColor=#312E81;fillColor=#C7D2FE;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1720" y="200" width="190" height="150" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="alembic" value="Alembic Version Table&lt;br&gt;Schema lifecycle + migrations" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#312E81;fillColor=#E0E7FF;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1940" y="220" width="200" height="100" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="layer_external" value="External Integrations" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#FDF2F8;strokeColor=#BE185D;fontSize=13;fontStyle=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="1670" y="470" width="490" height="310" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="dummyjson" value="DummyJSON API&lt;br&gt;Product import source&lt;br&gt;(/products?limit=&amp;amp;amp;skip=)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#9D174D;fillColor=#FBCFE8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1720" y="540" width="190" height="100" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="razorpay" value="Razorpay API&lt;br&gt;Create order, verify/capture payment,&lt;br&gt;webhook signature validation" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#9D174D;fillColor=#FBCFE8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1940" y="520" width="200" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="paytm" value="Paytm Credentials&lt;br&gt;Configured via env&lt;br&gt;(integration-ready placeholder)" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#9D174D;fillColor=#FBCFE8;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="1720" y="660" width="420" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="layer_devops" value="DevOps &amp;amp;amp; Delivery" style="rounded=1;whiteSpace=wrap;html=1;fillColor=#F8FAFC;strokeColor=#475569;fontSize=13;fontStyle=1;align=left;verticalAlign=top;spacingLeft=10;spacingTop=8;" vertex="1" parent="1">
+          <mxGeometry x="30" y="640" width="930" height="420" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="github" value="GitHub Repository" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0F172A;fillColor=#E2E8F0;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="70" y="710" width="170" height="80" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="gha" value="GitHub Actions CI (.github/workflows/ci.yml)&lt;br&gt;Job 1: FastAPI pytest&lt;br&gt;Job 2: React build" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0F172A;fillColor=#CBD5E1;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="270" y="690" width="280" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="render_front" value="Render Static Site&lt;br&gt;React build + SPA rewrite" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0F172A;fillColor=#E2E8F0;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="590" y="700" width="170" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="render_back" value="Render Web Service&lt;br&gt;FastAPI Docker deploy" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0F172A;fillColor=#E2E8F0;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="790" y="700" width="150" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="aws" value="AWS Alternative Path&lt;br&gt;ECR + App Runner + RDS" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0F172A;fillColor=#E2E8F0;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="590" y="820" width="350" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="env" value="Configuration &amp;amp;amp; Secrets&lt;br&gt;.env / Render env vars / AWS env vars" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0F172A;fillColor=#F1F5F9;fontSize=12;" vertex="1" parent="1">
+          <mxGeometry x="70" y="840" width="480" height="90" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="legend" value="Legend: Blue=client flow, Green=backend internal, Purple=data access, Pink=external integrations, Gray=delivery pipeline" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#334155;fillColor=#FFFFFF;fontSize=11;" vertex="1" parent="1">
+          <mxGeometry x="70" y="950" width="870" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_user_browser" value="UI actions" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#2563EB;" edge="1" parent="1" source="customer" target="browser">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_vendor_browser" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#2563EB;" edge="1" parent="1" source="vendor" target="browser">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_admin_browser" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#2563EB;" edge="1" parent="1" source="admin" target="browser">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_browser_front" value="HTTPS" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#2563EB;" edge="1" parent="1" source="browser" target="react_app">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_react_auth" value="session" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#C2410C;" edge="1" parent="1" source="react_app" target="auth_ctx">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_react_route" value="route render" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#C2410C;" edge="1" parent="1" source="react_app" target="routing">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_react_api" value="REST calls" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#C2410C;" edge="1" parent="1" source="react_app" target="api_client">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_front_back" value="/api/v1 (JWT Bearer)" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#2563EB;strokeWidth=2;" edge="1" parent="1" source="api_client" target="api_entry">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_entry_router" value="" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#15803D;" edge="1" parent="1" source="api_entry" target="api_router">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_service" value="business rules" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#15803D;" edge="1" parent="1" source="api_router" target="service_layer">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_router_auth" value="role checks" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#15803D;" edge="1" parent="1" source="api_router" target="auth_layer">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_service_data" value="ORM operations" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#15803D;" edge="1" parent="1" source="service_layer" target="data_layer">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_data_db" value="SQL" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#4338CA;strokeWidth=2;" edge="1" parent="1" source="data_layer" target="db">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_data_alembic" value="migration state" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#4338CA;" edge="1" parent="1" source="data_layer" target="alembic">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_import_dummyjson" value="HTTP fetch" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#BE185D;" edge="1" parent="1" source="service_layer" target="dummyjson">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_payment_razorpay" value="order/create/verify/webhook" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#BE185D;" edge="1" parent="1" source="service_layer" target="razorpay">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_payment_paytm" value="env-based provider config" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#BE185D;" edge="1" parent="1" source="service_layer" target="paytm">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_repo_ci" value="push / PR" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#475569;" edge="1" parent="1" source="github" target="gha">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_ci_front" value="build verify" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#475569;" edge="1" parent="1" source="gha" target="render_front">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_ci_back" value="test verify" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#475569;" edge="1" parent="1" source="gha" target="render_back">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e_render_front_client" value="serves SPA" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeColor=#475569;" edge="1" parent="1" source="render_front" target="browser">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_render_back_backend" value="container runtime" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeColor=#475569;" edge="1" parent="1" source="render_back" target="api_entry">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_ops_db" value="migrate + seed" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeColor=#475569;" edge="1" parent="1" source="runtime_ops" target="db">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_env_back" value="env vars" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeColor=#475569;" edge="1" parent="1" source="env" target="render_back">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_env_front" value="VITE_API_BASE_URL" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeColor=#475569;" edge="1" parent="1" source="env" target="render_front">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e_aws_back" value="alternative deploy" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;dashed=1;endArrow=block;endFill=1;strokeColor=#475569;" edge="1" parent="1" source="aws" target="api_entry">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
