@@ -1,108 +1,83 @@
-# Ecom Full-Stack Project Documentation
+# Ecom Full-Stack Technical Documentation
 
-## 1. Project Overview
+## 1) Project Summary
 
-### 1.1 Project Name
-Ecom Full Stack Commerce Platform
+Ecom is a full-stack e-commerce system built with FastAPI (backend) and React/Vite (frontend).
 
-### 1.2 Purpose
-This project delivers a production-oriented e-commerce platform with:
-1. A FastAPI backend for authentication, catalog, cart, order, coupon, review, payment, and import workflows.
-2. A React frontend for customer storefront, vendor product operations, and admin control panel.
-3. Deployment-ready infrastructure and runbooks for Render and AWS.
+It supports:
 
-### 1.3 Core Business Scope
-1. Customer lifecycle: register, login, browse catalog, add to cart, checkout, pay, review products.
-2. Staff lifecycle: admin and vendor can manage catalog and import products.
-3. Operations lifecycle: migrations, seed/bootstrap users, CI validation, cloud deployment.
+1. Customer storefront and checkout journeys
+2. Vendor/admin catalog operations
+3. Real Razorpay payment processing (UPI/Card)
+4. Redis-backed sessions/cookies and read caching
+5. Dockerized deployment + CI validation
 
-## 2. Technology Stack
+## 2) Current Architecture
 
-### 2.1 Backend
-1. FastAPI
-2. SQLAlchemy 2.0 ORM
-3. Alembic migrations
-4. PostgreSQL (production) and SQLite (local/test default)
-5. JWT authentication (`python-jose`) + password hashing (`passlib`)
+## 2.1 Runtime Components
 
-### 2.2 Frontend
-1. React 18
-2. React Router 6
-3. Vite 5
-4. JavaScript (no TypeScript)
+1. Browser client (customer/vendor/admin)
+2. React SPA (`react/`)
+3. FastAPI API (`fastapi/app/main.py`) at `/api/v1`
+4. SQLAlchemy ORM + database (PostgreSQL in production, SQLite local/test)
+5. Optional Redis for sessions and cache
+6. External APIs:
+   - DummyJSON product source
+   - Razorpay payments
 
-### 2.3 DevOps and Delivery
-1. Dockerized backend runtime
-2. Render and AWS deployment paths
-3. GitHub Actions CI (`.github/workflows/ci.yml`)
+## 2.2 Diagram Assets in Repository
 
-## 3. Repository Structure
+1. `schema.drawio.png` (schema view)
+2. `react/architecture.drawio.png` (system architecture view)
+
+## 3) Repository Layout
 
 ```text
 ecom/
-  fastapi/                       # Backend service
+  fastapi/
     app/
-      api/                       # Routers + endpoint modules
-      core/                      # Config, middleware, security
-      db/                        # Base, session, init seed logic
-      models/                    # SQLAlchemy domain models
-      schemas/                   # Pydantic request/response schemas
-      services/                  # Business logic services
-    alembic/                     # Migration environment + revisions
-    tests/                       # Backend test suite
-    manage.py                    # Management CLI
+      api/
+      core/
+      db/
+      models/
+      schemas/
+      services/
+    alembic/
+    tests/
+    manage.py
     Dockerfile
     docker-entrypoint.sh
-  react/                         # Frontend SPA
+  react/
     src/
-      pages/                     # Storefront, auth, profile, admin, vendor pages
-      components/                # Shell, route guards, reusable UI
-      context/                   # Auth context
-      lib/                       # API client, formatters, toast bus
-    vite.config.js
-  .github/workflows/ci.yml       # CI pipeline
-  DEPLOYMENT_GUIDE_RENDER_AWS.md # Cloud deployment runbook
-  schema.drawio                  # Database ER diagram
-  architecture.drawio            # System architecture diagram (this task)
+      components/
+      context/
+      lib/
+      pages/
+  .github/workflows/ci.yml
+  DEPLOYMENT_GUIDE_RENDER_AWS.md
+  README.md
+  documentation.md
+  presentation.md
 ```
 
-## 4. High-Level Architecture
+## 4) Backend Design (FastAPI)
 
-### 4.1 Diagram Artifacts
-1. `schema.drawio`: entity relationship model and table-level links.
-2. `architecture.drawio`: end-to-end system architecture, including client, frontend, backend layers, DB, integrations, and delivery pipeline.
+## 4.1 API and Middleware
 
-### 4.2 Runtime Components
-1. Client layer: customer, vendor, admin using browser.
-2. Frontend layer: React SPA with route guards and API client.
-3. Backend layer: FastAPI API + services + SQLAlchemy data layer.
-4. Data layer: PostgreSQL/SQLite with Alembic-managed schema.
-5. Integrations: DummyJSON import source, Razorpay API, Paytm credentials.
-6. DevOps: GitHub Actions CI and cloud deploy paths.
-
-### 4.3 Key Architectural Decisions
-1. Service-oriented backend modules (`services/`) keep business rules out of route handlers.
-2. JWT stateless auth enables horizontal API scaling.
-3. Explicit role guards (`admin`, `vendor`, `customer`) enforce least privilege.
-4. Migration-first schema strategy through Alembic ensures reproducible DB state.
-5. Frontend route-level protection prevents unauthorized UI access.
-
-## 5. Backend Architecture (FastAPI)
-
-### 5.1 API Entry and Middleware
-Primary entry: `fastapi/app/main.py`
+Entry point: `fastapi/app/main.py`
 
 Middleware stack:
-1. CORS middleware with configurable origins.
-2. GZip middleware (configurable).
-3. HTTPS redirect middleware (configurable).
-4. Trusted host middleware (optional via `ALLOWED_HOSTS`).
-5. Custom security headers middleware (`X-Frame-Options`, CSP, etc.).
 
-### 5.2 Routing Layout
-API root prefix: `/api/v1`
+1. CORS (`allow_credentials=True`)
+2. GZip (optional)
+3. HTTPS redirect (optional)
+4. Trusted host (optional)
+5. Security headers middleware
 
-Routers:
+## 4.2 Route Modules
+
+Mounted in `fastapi/app/api/router.py`:
+
 1. `health`
 2. `auth`
 3. `users`
@@ -114,298 +89,279 @@ Routers:
 9. `coupons`
 10. `reviews`
 
-### 5.3 Security Model
-1. Password hashing: PBKDF2 SHA-256 via `passlib`.
-2. JWT token generation and decode via `python-jose`.
-3. OAuth2 bearer token flow for protected routes.
-4. Role-based dependencies:
-   - `get_current_user`: authenticated active user
-   - `get_admin_user`: admin-only
-   - `get_staff_user`: admin or vendor
+## 4.3 Auth + Session Model
 
-### 5.4 Configuration Model
-Central settings source: `fastapi/app/core/config.py`
+Implemented in:
 
-Major config groups:
-1. App runtime: `APP_ENV`, `DEBUG`, `ENABLE_DOCS`, `API_V1_PREFIX`
-2. Database: `DATABASE_URL`, pooling controls
-3. Commerce defaults: currency, conversion, delivery thresholds
-4. Security: JWT secret, expiry, host allowlist, CORS
-5. Seeder controls: admin/demo accounts and passwords
-6. Payment integration: Razorpay and Paytm credentials
+- `fastapi/app/api/v1/endpoints/auth.py`
+- `fastapi/app/api/deps.py`
+- `fastapi/app/services/session.py`
+- `fastapi/app/core/redis.py`
 
-Production guardrails:
-1. Rejects insecure defaults in production (`DEBUG`, JWT secret, admin password).
-2. Normalizes `ALLOWED_HOSTS` for URL/port/path mistakes.
+Behavior:
 
-## 6. Backend Domain Modules
+1. Login always returns JWT access token.
+2. If Redis is enabled and available, login also writes a server-side session and sets an HttpOnly cookie.
+3. Protected routes accept either:
+   - valid bearer JWT, or
+   - valid Redis session cookie.
+4. Logout deletes Redis session and clears cookie.
 
-### 6.1 Auth and User Management
-1. Register customer accounts.
-2. Login with email or username-style identity.
-3. Username resolution supports email local-part and seeded display names.
-4. Profile retrieval (`/auth/me`) and profile update (`/users/me`).
-5. Admin-only user listing and user lookup.
+## 4.4 Redis Cache Layer
 
-### 6.2 Address Management
-1. Customer can CRUD own addresses.
-2. Default address logic unsets previous default automatically.
+Implemented in:
 
-### 6.3 Catalog Management
-1. Categories: list, create, update.
-2. Products: list/filter/search, create, update, detail.
-3. Product images and variants persisted with SKU uniqueness checks.
+- `fastapi/app/services/cache.py`
+- category/product endpoints
 
-### 6.4 Product Import
-1. Staff-only import endpoint from `https://dummyjson.com/products`.
-2. Staff-only manual JSON import endpoint.
-3. Import service normalizes source records and upserts products.
-4. Import supports update-existing mode and category auto-creation.
-5. Detailed upstream error handling for DummyJSON HTTP/network failures.
+Current cache coverage:
 
-### 6.5 Cart and Checkout
-1. Active cart per user (reactivation strategy when cart is converted).
-2. Add/update/remove/clear cart items.
-3. Checkout converts cart to order and creates inventory movement records.
-4. Coupon discount applied at checkout if valid.
-5. Delivery charge policy:
-   - Subtotal `< 1000` INR: delivery charge `100`
-   - Subtotal `>= 1000` INR: free delivery
+1. `GET /categories`
+2. `GET /products`
+3. `GET /products/{id}`
 
-### 6.6 Order and Payment
-1. List my orders and get order details.
-2. Payment quote endpoint calculates base + optional tax.
-3. Free/sandbox payment flows (`manual_free`, `mock_free`, `cod`, etc.).
-4. Razorpay order creation and signature verification flow.
-5. Razorpay webhook endpoint validates signature and updates status.
-6. Tax is intentionally applied at payment time, not at checkout.
+Cache invalidated on create/update/import operations.
 
-### 6.7 Coupons and Reviews
-1. Admin-only coupon creation and public/filtered coupon listing.
-2. Product reviews with duplicate prevention (one review per user/product).
-3. Verified purchase flag computed from order history.
+## 4.5 Product Import
 
-## 7. Service Layer Responsibilities
+Implemented in:
 
-### 7.1 `services/cart.py`
-1. Active cart creation/reactivation and concurrent creation safeguards.
-2. Cart item mutation logic and variant validation.
+- `fastapi/app/services/product_import.py`
+- `fastapi/app/schemas/importer.py`
+- `fastapi/app/api/v1/endpoints/products.py`
 
-### 7.2 `services/order.py`
-1. Checkout conversion from cart to order.
-2. Coupon validation and discount calculation.
-3. Shipping rule calculation.
-4. Inventory movement writes for order reservation.
+Capabilities:
 
-### 7.3 `services/payment.py`
-1. Payment gateway registry and supported provider validation.
-2. Payment quote and tax calculations.
-3. Internal gateway processing and COD state handling.
-4. Razorpay integration for order creation, signature verification, capture, webhook.
+1. Import from `dummyjson.com`
+2. Import from manual JSON payload
+3. Upsert with `update_existing`
+4. Category auto-creation
+5. INR normalization for imported prices
 
-### 7.4 `services/product_import.py`
-1. Remote fetch from DummyJSON.
-2. Product normalization and INR conversion.
-3. Upsert behavior for category/product/variant/images.
+Validation constraints:
 
-## 8. Database and Data Model
+- DummyJSON import `limit` is `1..500`
+- `skip >= 0`
 
-### 8.1 Core Entity Groups
-1. Identity: `users`, `addresses`
-2. Catalog: `categories`, `products`, `product_images`, `product_variants`
-3. Cart: `carts`, `cart_items`
-4. Order lifecycle: `orders`, `order_items`, `order_coupons`, `coupons`, `payments`, `shipments`
-5. Inventory and quality: `inventory_movements`, `reviews`
+## 4.6 Payment Integration (Razorpay Only)
 
-### 8.2 Important Constraints
-1. Unique user email.
-2. Unique category slug.
-3. Unique product slug.
-4. Unique variant SKU.
-5. Unique cart by user (`carts.user_id`).
-6. Unique cart item per cart+variant.
-7. Unique coupon code.
-8. Unique review per user+product with rating check constraint (1-5).
+Implemented in:
 
-### 8.3 Migration Strategy
-1. Alembic environment uses app metadata from SQLAlchemy models.
-2. `upgrade head` executed automatically in container entrypoint by default.
-3. Initial schema migration defines all tables and indexes.
+- `fastapi/app/services/payment.py`
+- `fastapi/app/api/v1/endpoints/orders.py`
+- `fastapi/app/schemas/payment.py`
 
-## 9. Seed, Bootstrap, and Operations
+Enabled providers:
 
-### 9.1 Startup Runtime Flow
-`fastapi/docker-entrypoint.sh` execution order:
-1. Run DB migrations when `RUN_DB_MIGRATIONS=true`.
-2. Run staff bootstrap when `AUTO_BOOTSTRAP_STAFF=true`.
-3. Run explicit seed when `RUN_SEED=true`.
-4. Launch FastAPI with `manage.py run`.
+1. `razorpay_upi`
+2. `razorpay_card`
 
-### 9.2 Seed Behavior
-1. `ensure_default_admin` creates or updates default admin credentials from env.
-2. `ensure_demo_users` creates/updates demo admin and vendor when enabled.
-3. `seed-if-needed` creates bootstrap staff only when no admin/vendor exists.
+Flow:
 
-### 9.3 Management CLI (`manage.py`)
-1. `run`
-2. `check`
-3. `upgrade`, `downgrade`, `revision`
-4. `seed`, `seed-if-needed`
-5. `import-products`
-6. `normalize-inr`
+1. Checkout creates internal order
+2. Optional quote endpoint calculates tax/total
+3. Backend creates Razorpay order (`/payment/razorpay/order`)
+4. Frontend opens Razorpay checkout popup
+5. Backend verifies signature (`/payment/razorpay/verify`)
+6. Webhook endpoint updates state asynchronously (`/payment/razorpay/webhook`)
 
-## 10. Frontend Architecture (React)
+Important behavior:
 
-### 10.1 App Composition
-1. `main.jsx` wraps app in `BrowserRouter` and `AuthProvider`.
-2. `App.jsx` declares public, authenticated, vendor, and admin routes.
-3. `AppShell` handles global layout, nav, theme, and toast stack.
-4. `AdminShell` provides side navigation for admin sections.
-5. `ProtectedRoute` enforces auth and role checks.
+- Legacy endpoint `/orders/{id}/pay` exists but intentionally returns an error for real gateways.
 
-### 10.2 State and Session
-1. `AuthContext` stores JWT token and user profile in `localStorage`.
-2. Auto-hydrates session on app load by calling `/auth/me`.
-3. Exposes role flags (`isAdmin`, `isVendor`) for route/UI gating.
+## 5) Frontend Design (React)
 
-### 10.3 API Integration
-1. Central API wrapper in `src/lib/api.js`.
-2. Builds query strings, attaches bearer token, parses JSON/text.
-3. Centralized error handling with UI toast notifications.
-4. Uses `VITE_API_BASE_URL` for environment-specific backend routing.
+## 5.1 App Structure
 
-### 10.4 Route Capabilities
-1. Public: home, catalog, product detail, login, register.
-2. Customer: cart, checkout, orders, order detail, profile.
-3. Vendor/Admin: product studio and bulk import.
-4. Admin: dashboard, users, categories, products, coupons, orders.
+Key files:
 
-### 10.5 UX Utilities
-1. Currency/time formatting uses INR and IST display conventions.
-2. Toast bus provides global feedback for API operations.
-3. Theme toggle persists in local storage.
+1. `src/App.jsx` route map
+2. `src/components/AppShell.jsx` shell, nav, toasts, theme toggle
+3. `src/context/AuthContext.jsx` auth/session state
+4. `src/lib/api.js` centralized API client
+5. `src/pages/*` customer/vendor/admin pages
 
-## 11. API Capability Map
+## 5.2 Frontend Auth Behavior
 
-| Domain | Key Endpoints |
-|---|---|
-| Health | `GET /health`, `GET /health/ready` |
-| Auth | `POST /auth/register`, `POST /auth/login`, `GET /auth/me` |
-| Users | `GET /users`, `GET /users/{id}`, `PATCH /users/me` |
-| Addresses | `GET/POST/PATCH/DELETE /addresses/me...` |
-| Categories | `GET/POST/PATCH /categories...` |
-| Products | `GET/POST/PATCH /products...` |
-| Import | `POST /products/import/dummyjson`, `POST /products/import/json` |
-| Cart | `GET /cart/me`, `POST/PATCH/DELETE /cart/items...`, `DELETE /cart/clear` |
-| Orders | `POST /orders/checkout`, `GET /orders/me`, `GET /orders/{id}` |
-| Payments | `GET /orders/payment-gateways/free`, `POST /orders/{id}/payment/quote`, `POST /orders/{id}/pay`, Razorpay create/verify/webhook |
-| Coupons | `GET /coupons`, `POST /coupons` |
-| Reviews | `GET /reviews/product/{product_id}`, `POST /reviews` |
+1. Stores token/user in localStorage
+2. Calls `/auth/me` on startup
+3. Includes `credentials: 'include'` in fetch calls
+4. Supports Redis cookie session fallback transparently
+5. Calls `/auth/logout` for backend session cleanup
 
-## 12. Testing Strategy
+## 5.3 Product Import UI
 
-### 12.1 Backend Test Organization
-1. `test_auth.py`: registration, login, identity validation.
-2. `test_users.py`: user permissions and profile behavior.
-3. `test_catalog.py`: category/product authorization and validation.
-4. `test_cart_orders.py`: cart lifecycle, checkout, payment behavior.
-5. `test_reviews_coupons_addresses.py`: review/coupon/address constraints.
-6. `test_product_import.py`: import authorization and import behavior.
-7. `test_production_readiness.py`: middleware headers and production setting guards.
+In `AdminProductsPage`/`VendorProductsPage`:
 
-### 12.2 CI Pipeline
-GitHub Actions workflow (`.github/workflows/ci.yml`):
-1. FastAPI job:
-   - Python 3.12
-   - install `requirements-dev.txt`
-   - run `pytest -q`
-2. React job:
-   - Node 20
-   - `npm ci`
-   - `npm run build`
+1. DummyJSON import form
+2. Manual JSON import textarea
+3. UI validation for limit/skip
+4. Robust error normalization for FastAPI 422 response shapes
 
-## 13. Deployment and Infrastructure
+## 5.4 Payment UI
 
-### 13.1 Backend Container
-1. Base image: `python:3.12-slim`
-2. Includes `ca-certificates` for outbound HTTPS calls.
-3. Runs as non-root user (`app`).
-4. Entrypoint handles migrations and optional seed/bootstrap.
+In `OrderDetailPage`:
 
-### 13.2 Render Deployment
-1. Backend: Render Web Service (Docker root `fastapi`).
-2. Frontend: Render Static Site (root `react`, publish `dist`, SPA rewrite).
-3. Managed Postgres recommended for production.
+1. provider selection limited to `razorpay_upi` and `razorpay_card`
+2. Razorpay checkout script loader
+3. verify endpoint call after successful payment callback
 
-### 13.3 AWS Deployment (Alternative)
-1. Backend image to ECR.
-2. Deploy via App Runner.
-3. Persist data in RDS PostgreSQL.
+## 6) Data Model Summary
 
-### 13.4 Critical Environment Variables
+Main entities:
 
-| Area | Variables |
-|---|---|
-| Runtime | `APP_ENV`, `DEBUG`, `ENABLE_DOCS`, `UVICORN_WORKERS` |
-| DB | `DATABASE_URL`, `RUN_DB_MIGRATIONS` |
-| Auth/Security | `JWT_SECRET_KEY`, `ALLOWED_HOSTS`, `CORS_ORIGINS`, `ENABLE_HTTPS_REDIRECT` |
-| Seed/Bootstrap | `AUTO_BOOTSTRAP_STAFF`, `RUN_SEED`, `SEED_DEMO_USERS`, `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`, `DEMO_*` |
-| Frontend | `VITE_API_BASE_URL` |
-| Payments | `RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`, `RAZORPAY_WEBHOOK_SECRET`, `PAYTM_MERCHANT_ID`, `PAYTM_MERCHANT_KEY` |
+1. Users and addresses
+2. Categories, products, variants, images
+3. Carts and cart items
+4. Orders and order items
+5. Coupons
+6. Payments
+7. Reviews
+8. Inventory movements
 
-## 14. Security and Reliability Notes
+Schema evolution is managed by Alembic migrations (`fastapi/alembic`).
 
-1. JWT secret and admin credentials must be rotated for production.
-2. `ALLOWED_HOSTS` and `CORS_ORIGINS` must be explicitly set per deployed domains.
-3. Security middleware sets baseline protection headers.
-4. Readiness endpoint verifies DB connectivity (`SELECT 1`).
-5. Transactional migration and startup sequence reduce deployment drift risk.
+## 7) Configuration and Environment Variables
 
-## 15. End-to-End Functional Walkthrough (Presentation Flow)
+## 7.1 Backend Core
 
-### 15.1 Demo Storyline
-1. Start at home/catalog and explain customer browsing flow.
-2. Register or login as customer and add products to cart.
-3. Checkout to create order and show delivery/coupon calculations.
-4. Pay order using free gateway or Razorpay flow.
-5. Switch to admin/vendor and show product import from DummyJSON.
-6. Show admin dashboards for users, categories, products, coupons, and orders.
+- `APP_ENV`, `DEBUG`, `ENABLE_DOCS`
+- `DATABASE_URL`, SQL pool settings
+- `CORS_ORIGINS`, `ALLOWED_HOSTS`
+- `ENABLE_HTTPS_REDIRECT`, `ENABLE_GZIP`
+- `JWT_SECRET_KEY`, `ACCESS_TOKEN_EXPIRE_MINUTES`
 
-### 15.2 Key Talking Points for Presentation
-1. Clear separation of concerns: routes vs services vs models.
-2. Production readiness: Docker, migrations, env-validated config.
-3. Role-based multi-tenant style UI/API controls.
-4. Real payment gateway wiring with sandbox-safe fallbacks.
-5. CI validation gates for backend and frontend before deployment.
+## 7.2 Redis + Session + Cache
 
-## 16. Current Strengths and Future Enhancements
+- `REDIS_ENABLED`
+- `REDIS_URL`
+- `REDIS_CONNECT_TIMEOUT_SECONDS`
+- `REDIS_SOCKET_TIMEOUT_SECONDS`
+- `SESSION_COOKIE_NAME`
+- `SESSION_COOKIE_MAX_AGE_SECONDS`
+- `SESSION_COOKIE_SECURE`
+- `SESSION_COOKIE_SAMESITE`
+- `SESSION_COOKIE_DOMAIN`
+- `SESSION_REDIS_PREFIX`
+- `SESSION_TTL_SECONDS`
+- `CACHE_REDIS_PREFIX`
+- `CACHE_TTL_SECONDS`
 
-### 16.1 Strengths
-1. Full-stack coverage from auth to payments.
-2. Strong operational tooling (`manage.py`, migration automation, deployment runbook).
-3. Good test coverage for critical business paths.
-4. Extensible service layer for adding new providers and workflows.
+## 7.3 Seed and Bootstrap
 
-### 16.2 Suggested Next Enhancements
-1. Add frontend automated tests (unit/e2e).
-2. Add API rate limiting and structured audit logs.
-3. Add observability stack (traces/metrics dashboards).
-4. Add background jobs for asynchronous email and fulfillment workflows.
-5. Add advanced inventory controls and stock reservation expiry.
+- `DEFAULT_ADMIN_EMAIL`, `DEFAULT_ADMIN_PASSWORD`
+- `SEED_DEMO_USERS`
+- `DEMO_ADMIN_*`, `DEMO_VENDOR_*`
+- Docker entrypoint runtime flags:
+  - `RUN_DB_MIGRATIONS`
+  - `AUTO_BOOTSTRAP_STAFF`
+  - `RUN_SEED`
 
-## 17. Quick Command Reference
+## 7.4 Payment
 
-### 17.1 Backend
+- `RAZORPAY_KEY_ID`
+- `RAZORPAY_KEY_SECRET`
+- `RAZORPAY_WEBHOOK_SECRET`
+
+## 7.5 Frontend
+
+- `VITE_API_BASE_URL`
+
+## 8) API Map (Important Endpoints)
+
+## 8.1 Auth and User
+
+- `POST /api/v1/auth/register`
+- `POST /api/v1/auth/login`
+- `GET /api/v1/auth/me`
+- `POST /api/v1/auth/logout`
+- `GET /api/v1/users`
+- `GET /api/v1/users/{id}`
+- `PATCH /api/v1/users/me`
+
+## 8.2 Catalog and Import
+
+- `GET /api/v1/categories`
+- `POST /api/v1/categories`
+- `PATCH /api/v1/categories/{id}`
+- `GET /api/v1/products`
+- `GET /api/v1/products/{id}`
+- `POST /api/v1/products`
+- `PATCH /api/v1/products/{id}`
+- `POST /api/v1/products/import/dummyjson`
+- `POST /api/v1/products/import/json`
+
+## 8.3 Cart, Orders, Payments
+
+- `GET /api/v1/cart/me`
+- `POST /api/v1/cart/items`
+- `PATCH /api/v1/cart/items/{id}`
+- `DELETE /api/v1/cart/items/{id}`
+- `DELETE /api/v1/cart/clear`
+- `POST /api/v1/orders/checkout`
+- `GET /api/v1/orders/me`
+- `GET /api/v1/orders/{id}`
+- `GET /api/v1/orders/payment-gateways/free`
+- `POST /api/v1/orders/{id}/payment/quote`
+- `POST /api/v1/orders/{id}/payment/razorpay/order`
+- `POST /api/v1/orders/{id}/payment/razorpay/verify`
+- `POST /api/v1/orders/payment/razorpay/webhook`
+
+## 8.4 Coupons, Reviews, Health
+
+- `GET /api/v1/coupons`
+- `POST /api/v1/coupons`
+- `GET /api/v1/reviews/product/{product_id}`
+- `POST /api/v1/reviews`
+- `GET /api/v1/health`
+- `GET /api/v1/health/ready`
+
+## 9) CI/CD and Deployment
+
+## 9.1 CI Workflow
+
+File: `.github/workflows/ci.yml`
+
+Jobs:
+
+1. FastAPI tests (`pytest -q`)
+2. React build (`npm run build`)
+
+## 9.2 Docker Runtime
+
+- Dockerfile uses `python:3.12-slim`
+- non-root runtime user
+- startup command:
+  - `python manage.py run --host 0.0.0.0 --port ${PORT:-8000} --workers ${UVICORN_WORKERS:-2}`
+
+## 9.3 Deployment References
+
+- `DEPLOYMENT_GUIDE_RENDER_AWS.md`
+- Render backend webhook example:
+  - `https://fastapi-react-ecom.onrender.com/api/v1/orders/payment/razorpay/webhook`
+
+## 10) Operations Playbook
+
+## 10.1 Backend Local Commands
+
 ```bash
 cd fastapi
+source .venv/bin/activate
 python manage.py check
 python manage.py upgrade head
 python manage.py seed
-python manage.py run --host 0.0.0.0 --port 8000 --workers 2
-python manage.py import-products --from-dummyjson --limit 20 --skip 0
+python manage.py run --reload --host 0.0.0.0 --port 8000
 ```
 
-### 17.2 Frontend
+## 10.2 Import in Batches
+
+```bash
+python manage.py import-products --from-dummyjson --limit 500 --skip 0
+python manage.py import-products --from-dummyjson --limit 500 --skip 500
+```
+
+## 10.3 Frontend Local Commands
+
 ```bash
 cd react
 npm ci
@@ -413,23 +369,18 @@ npm run dev
 npm run build
 ```
 
-### 17.3 CI Validation
-```bash
-# backend checks
-cd fastapi && pytest -q
+## 11) Known Constraints and Next Steps
 
-# frontend build check
-cd react && npm run build
-```
+Current constraints:
 
----
+1. `/orders/{id}/pay` is intentionally disabled for live gateway flow.
+2. Payment support is limited to Razorpay UPI/Card providers.
+3. Automated frontend tests are not yet part of CI.
 
-## Appendix A: Diagram Files
-1. `architecture.drawio` for full system architecture.
-2. `schema.drawio` for detailed relational schema.
+Recommended next enhancements:
 
-## Appendix B: Primary Documentation Files
-1. `README.md` (repo overview)
-2. `fastapi/README.md` (backend details)
-3. `react/README.md` (frontend details)
-4. `DEPLOYMENT_GUIDE_RENDER_AWS.md` (deployment runbook)
+1. Add React unit/e2e tests.
+2. Add rate limiting and structured audit logs.
+3. Add observability (metrics, tracing, dashboards).
+4. Add async jobs for notifications and fulfillment.
+

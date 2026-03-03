@@ -1,50 +1,41 @@
 # Ecom React Frontend (Vite + JavaScript)
 
-This folder contains the customer storefront and admin UI for the FastAPI backend in `../fastapi`.
+Frontend SPA for the FastAPI backend in `../fastapi`.
 
-Stack:
+## Stack
 
 - React 18
 - React Router 6
 - Vite 5
-- Plain JavaScript (no TypeScript)
+- JavaScript
 
-## Features
+## Frontend Capabilities
 
-- Seamless routed UX across storefront and admin pages
-- JWT auth with persistent session (`localStorage`)
-- Customer flows:
-  - Register/login
-  - Browse catalog, filter/search products
-  - Product details and reviews
-  - Cart and 3-step checkout flow
-  - Order history and order payment
-  - Profile + addresses
-  - Global top overlay toasts for success/error feedback
-- Admin flows:
-  - Dashboard metrics
-  - Users list + inspect endpoint
-  - Category management
-  - Product creation + status updates
-  - Coupon creation
-  - Order lookup + Razorpay payment handoff
-- Payment flow supports:
-  - UPI (`razorpay_upi`)
-  - Credit/Debit (`razorpay_card`)
-- Delivery policy in checkout: `< INR 1000` adds `INR 100`, else free
-- Prices rendered in INR; timestamps rendered in IST
-- For `razorpay_upi` / `razorpay_card`, frontend opens Razorpay Checkout popup and verifies signature through backend before marking order paid
-- API requests include browser credentials to support Redis-backed HttpOnly session cookies
+- Public storefront: home, catalog, product details
+- Customer flows: login/register, cart, checkout, orders, profile
+- Vendor/Admin product studio with bulk imports
+- Admin operations: users, categories, products, coupons, order lookup
+- Razorpay checkout popup integration (UPI/Card)
+- Global toast notifications for success/error states
+- Theme toggle (light/dark)
+
+## Auth Model in UI
+
+- Stores JWT token and profile in localStorage
+- Calls `/auth/me` on app startup to hydrate session
+- API requests include `credentials: 'include'`
+- Supports backend Redis HttpOnly session cookie fallback
+- Logout calls backend `/auth/logout` and clears local state
 
 ## Route Map
 
 Public routes:
 
-- `/` Home
-- `/catalog` Catalog listing + filters
-- `/products/:productId` Product details + reviews
-- `/login` Login
-- `/register` Register
+- `/`
+- `/catalog`
+- `/products/:productId`
+- `/login`
+- `/register`
 
 Authenticated customer routes:
 
@@ -56,7 +47,7 @@ Authenticated customer routes:
 
 Authenticated vendor/admin route:
 
-- `/vendor/products` (create products + import from DummyJSON/manual JSON)
+- `/vendor/products`
 
 Authenticated admin routes:
 
@@ -67,12 +58,10 @@ Authenticated admin routes:
 - `/admin/coupons`
 - `/admin/orders`
 
-## API Coverage
-
-The UI integrates these backend route groups:
+## Backend API Coverage
 
 - `GET /health`, `GET /health/ready`
-- `POST /auth/register`, `POST /auth/login`, `GET /auth/me`
+- `POST /auth/register`, `POST /auth/login`, `GET /auth/me`, `POST /auth/logout`
 - `GET /users`, `GET /users/{id}`, `PATCH /users/me`
 - `GET/POST/PATCH/DELETE /addresses/me...`
 - `GET/POST/PATCH /categories...`
@@ -87,58 +76,49 @@ The UI integrates these backend route groups:
 - `GET/POST /coupons`
 - `GET /reviews/product/{product_id}`, `POST /reviews`
 
+## Product Import UX
+
+In `/vendor/products` and `/admin/products`:
+
+- Import from DummyJSON
+- Import from pasted JSON payload
+
+DummyJSON constraints enforced in UI/backend:
+
+- `limit` must be between `1` and `500`
+- `skip` must be `>= 0`
+- backend validation errors are normalized into readable toast messages
+
 ## Local Development
 
-1. Install Node.js 20+ and npm.
-2. From this folder:
-
 ```bash
+cd react
 cp .env.example .env
 npm install
 npm run dev
 ```
 
-3. Open `http://localhost:5173`.
-   If you open via `http://0.0.0.0:5173`, backend CORS must include `0.0.0.0` origin (already included in current backend defaults).
-
-Default backend URL is:
+Default env:
 
 ```env
 VITE_API_BASE_URL=http://localhost:8000/api/v1
 ```
 
-If backend runs on another host/port, update `.env` and restart Vite.
-
-## Build for Production
+## Production Build
 
 ```bash
 npm run build
 npm run preview -- --host
 ```
 
-Output directory: `dist/`
-
-## Auth and Admin Access
-
-- Login/register uses `/auth/*` (login accepts email or username).
-- Admin routes require user role `admin`.
-- If you seed backend defaults, admin email is from `DEFAULT_ADMIN_EMAIL` in backend `.env`.
-
-Demo credentials created by `python manage.py seed`:
-
-- Admin: `ecomadmin` / `ecom@123admin`
-- Vendor: `ecomvendor` / `ecom@123vendor`
-
-Vendor users can use `/vendor/products` to add/import products.
+Build output: `dist/`
 
 ## Deployment Notes
 
-For full backend + frontend deployment on Render and AWS, see:
-
-- `../DEPLOYMENT_GUIDE_RENDER_AWS.md`
-
-Critical production settings:
-
-- Set frontend env `VITE_API_BASE_URL` to your deployed backend `/api/v1` URL.
-- Add frontend domain to backend `CORS_ORIGINS`.
-- Ensure SPA fallback rewrite is enabled (`/* -> /index.html`) on static hosting.
+- Set `VITE_API_BASE_URL` to deployed backend `/api/v1` URL
+- Add frontend domain to backend `CORS_ORIGINS`
+- Ensure SPA rewrite fallback is configured (`/* -> /index.html`)
+- For Render Static Site:
+  - root directory: `react`
+  - build command: `npm ci && npm run build`
+  - publish directory: `dist`

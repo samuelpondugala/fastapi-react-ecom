@@ -1,213 +1,164 @@
-# Ecom Backend Deployment Guide (Render + AWS)
+# Ecom Deployment Guide (Render + AWS)
 
-Last updated: 2026-02-25
+Last updated: 2026-03-03
 
-This guide explains, stage-by-stage, how to deploy the backend in `fastapi/` to:
+This guide is fully aligned with the current codebase and docs:
 
-1. Render (fastest path)
-2. AWS App Runner + ECR + RDS PostgreSQL (AWS-managed path)
+- `README.md`
+- `fastapi/README.md`
+- `react/README.md`
+- `documentation.md`
 
-It is written for this repository layout:
+It covers:
 
-- `ecom/fastapi/` -> FastAPI backend
-- `ecom/react/` -> frontend app
+1. Backend deployment (FastAPI in `fastapi/`)
+2. Frontend deployment (React in `react/`)
+3. Redis-backed session/cookie + cache setup
+4. Razorpay live payment setup (UPI/Card)
 
-## Stage 0: Understand the production architecture
+Repository layout assumed:
 
-For both platforms, the production architecture is:
+- `ecom/fastapi` backend
+- `ecom/react` frontend
 
-1. React SPA frontend (`ecom/react`) served from static hosting
-2. Containerized FastAPI app (`ecom/fastapi`) for API
-3. Managed PostgreSQL database (not SQLite)
-4. Environment variables for secrets/config
-5. Health checks (`/api/v1/health/ready`)
-6. HTTPS endpoints for frontend and backend domains
-7. Payment modes in flow: Razorpay UPI and Cards (real gateways only)
+## 1) Current Production Architecture
 
-Important notes:
+1. React SPA served as static site
+2. FastAPI backend served as Docker web service
+3. Managed PostgreSQL database
+4. Optional but recommended Redis service for:
+   - server-side sessions
+   - category/product API cache
+5. Razorpay payment integration via backend create/verify/webhook endpoints
+6. CI checks before deployment (`.github/workflows/ci.yml`)
 
-- Do not use SQLite in production.
-- Do not keep default secrets in production.
-- Do not open `/docs` publicly unless you intentionally want it accessible.
-- Payment tax quote is available via `POST /api/v1/orders/{order_id}/payment/quote`.
+Important implementation notes:
 
-## Stage 1: Local readiness checklist
+1. Payment providers enabled: `razorpay_upi`, `razorpay_card`
+2. Legacy endpoint `POST /api/v1/orders/{order_id}/pay` is intentionally disabled for real gateways
+3. DummyJSON import request limit is `1..500` (batch for larger imports)
 
-Run these from `ecom/fastapi`.
+## 2) Local Pre-Deployment Readiness
 
-### 1.1 Create and activate virtualenv
+Run from repository root unless mentioned.
+
+## 2.1 Backend setup check
 
 ```bash
+cd fastapi
 python -m venv .venv
 source .venv/bin/activate
-```
-
-### 1.2 Install dependencies
-
-```bash
 pip install -r requirements-dev.txt
-```
-
-### 1.3 Verify tests pass
-
-```bash
-pytest
-```
-
-### 1.4 Verify app config and DB migration locally
-
-```bash
+cp .env.example .env
 python manage.py check
 python manage.py upgrade head
 python manage.py seed
+pytest -q
 ```
 
-### 1.5 Verify frontend build locally
-
-Run from `ecom/react`:
+## 2.2 Frontend build check
 
 ```bash
+cd react
+cp .env.example .env
 npm ci
 npm run build
 ```
 
-## Stage 2: Production environment variable plan
-
-You will set these in Render/AWS:
-
-```env
-APP_ENV=production
-DEBUG=false
-ENABLE_DOCS=false
-
-# Use managed Postgres URL (Render/AWS RDS)
-DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:5432/DBNAME
-
-# Must be changed from defaults
-JWT_SECRET_KEY=YOUR_LONG_RANDOM_SECRET
-DEFAULT_ADMIN_PASSWORD=YOUR_STRONG_ADMIN_PASSWORD
-
-# Your domains
-ALLOWED_HOSTS=api.example.com,service-name.onrender.com
-CORS_ORIGINS=https://your-frontend-domain.com
-
-# Runtime tuning
-UVICORN_WORKERS=2
-RUN_DB_MIGRATIONS=true
-RUN_SEED=false
-AUTO_BOOTSTRAP_STAFF=true
-SEED_DEMO_USERS=false
-
-# Redis for sessions/cache
-REDIS_ENABLED=true
-REDIS_URL=redis://default:password@host:6379/0
-SESSION_COOKIE_SECURE=true
-SESSION_COOKIE_SAMESITE=none
-SESSION_COOKIE_DOMAIN=
-SESSION_TTL_SECONDS=604800
-CACHE_TTL_SECONDS=120
-
-# Frontend build env (React)
-VITE_API_BASE_URL=https://api.example.com/api/v1
-
-# Optional real payment credentials
-RAZORPAY_KEY_ID=rzp_live_xxx
-RAZORPAY_KEY_SECRET=xxx
-RAZORPAY_WEBHOOK_SECRET=whsec_xxx
-```
-
-Generate secure values:
+## 2.3 Optional local Docker check
 
 ```bash
-python - <<'PY'
-import secrets
-print('JWT_SECRET_KEY=' + secrets.token_urlsafe(64))
-print('DEFAULT_ADMIN_PASSWORD=' + secrets.token_urlsafe(24))
-PY
-```
-
-## Stage 3: Container build verification
-
-Before cloud deploy, verify Docker image locally.
-
-### 3.1 Build image
-
-From `ecom/fastapi`:
-
-```bash
+cd fastapi
 docker build -t ecom-api:local .
-```
-
-### 3.2 Run image locally
-
-```bash
 docker run --rm -p 8000:8000 \
   -e APP_ENV=dev \
-  -e DEBUG=false \
   -e DATABASE_URL=sqlite:///./ecom.db \
-  -e JWT_SECRET_KEY='local-secret-not-for-prod' \
+  -e JWT_SECRET_KEY='local-secret' \
   -e DEFAULT_ADMIN_PASSWORD='local-password' \
   -e RUN_DB_MIGRATIONS=true \
   -e RUN_SEED=true \
   ecom-api:local
 ```
 
-### 3.3 Verify
+Verify:
 
 ```bash
 curl -s http://127.0.0.1:8000/api/v1/health
 curl -s http://127.0.0.1:8000/api/v1/health/ready
 ```
 
----
+## 3) Environment Variable Plan (Canonical)
 
-## Track A: Deploy to Render (recommended fastest)
-
-## Stage R1: Create PostgreSQL on Render
-
-1. Open Render dashboard.
-2. Create `PostgreSQL` service.
-3. Pick region closest to users.
-4. Save:
-   - Internal Database URL
-   - External Database URL (optional)
-
-Use internal URL for backend service.
-
-## Stage R2: Create backend Web Service
-
-1. Click `New` -> `Web Service`.
-2. Connect your Git repository.
-3. Root directory: `fastapi`
-4. Runtime: `Docker`
-5. Branch: your deployment branch (`main` recommended)
-
-No custom start command is required because Docker now supports `PORT` and `UVICORN_WORKERS` env vars.
-
-## Stage R3: Configure environment variables
-
-In Render service `Environment` section, set:
+## 3.1 Backend required
 
 ```env
 APP_ENV=production
 DEBUG=false
 ENABLE_DOCS=false
-DATABASE_URL=postgresql+psycopg://...  # from Render Postgres Internal URL
-JWT_SECRET_KEY=...
-DEFAULT_ADMIN_PASSWORD=...
-ALLOWED_HOSTS=your-service.onrender.com,api.example.com
+
+DATABASE_URL=postgresql+psycopg://USER:PASSWORD@HOST:5432/DBNAME
+
+JWT_SECRET_KEY=YOUR_LONG_RANDOM_SECRET
+DEFAULT_ADMIN_PASSWORD=YOUR_STRONG_ADMIN_PASSWORD
+
+ALLOWED_HOSTS=api.example.com,service-name.onrender.com
 CORS_ORIGINS=https://your-frontend-domain.com
+
 UVICORN_WORKERS=2
 RUN_DB_MIGRATIONS=true
 RUN_SEED=false
 AUTO_BOOTSTRAP_STAFF=true
+SEED_DEMO_USERS=false
 ```
 
-Default account controls (backend):
+## 3.2 Redis sessions/cache (recommended)
+
+```env
+REDIS_ENABLED=true
+REDIS_URL=redis://default:password@host:6379/0
+REDIS_CONNECT_TIMEOUT_SECONDS=2.0
+REDIS_SOCKET_TIMEOUT_SECONDS=2.0
+
+SESSION_COOKIE_NAME=ecom_sid
+SESSION_COOKIE_MAX_AGE_SECONDS=604800
+SESSION_COOKIE_SECURE=true
+SESSION_COOKIE_SAMESITE=lax
+SESSION_COOKIE_DOMAIN=
+SESSION_REDIS_PREFIX=session:
+SESSION_TTL_SECONDS=604800
+
+CACHE_REDIS_PREFIX=cache:
+CACHE_TTL_SECONDS=120
+```
+
+Session cookie guidance:
+
+1. Same-site frontend/backend (common on Render subdomains):
+   - `SESSION_COOKIE_SAMESITE=lax`
+   - `SESSION_COOKIE_DOMAIN=` (empty)
+2. Cross-site domains:
+   - `SESSION_COOKIE_SAMESITE=none`
+   - `SESSION_COOKIE_SECURE=true`
+   - optionally `SESSION_COOKIE_DOMAIN=.example.com`
+
+## 3.3 Razorpay
+
+```env
+RAZORPAY_KEY_ID=rzp_live_xxx
+RAZORPAY_KEY_SECRET=xxx
+RAZORPAY_WEBHOOK_SECRET=whsec_xxx
+```
+
+## 3.4 Frontend required
+
+```env
+VITE_API_BASE_URL=https://api.example.com/api/v1
+```
+
+## 3.5 Optional seed/demo controls
 
 ```env
 DEFAULT_ADMIN_EMAIL=admin@example.com
-DEFAULT_ADMIN_PASSWORD=your-admin-password
 SEED_DEMO_USERS=true
 DEMO_ADMIN_USERNAME=ecomadmin
 DEMO_ADMIN_EMAIL=ecomadmin@example.com
@@ -217,129 +168,107 @@ DEMO_VENDOR_EMAIL=ecomvendor@example.com
 DEMO_VENDOR_PASSWORD=ecom@123vendor
 ```
 
-Important:
+## 4) Track A: Deploy to Render
 
-1. `RUN_SEED` must be `true` at least once to create/update these users.
-2. Login "username" is resolved from email local-part (for example `ecomadmin` from `ecomadmin@example.com`), so keep demo username consistent with demo email prefix.
-3. `AUTO_BOOTSTRAP_STAFF=true` automatically seeds only if no admin/vendor exists yet (safe default for first deploy).
-4. After explicit one-time seeding, keep `RUN_SEED=false` unless you intentionally want to rotate seed credentials from env.
+## 4.1 Create managed services
 
-Optional:
+1. Create Render PostgreSQL
+2. Create Render Redis/Key-Value service (recommended)
+3. Copy internal connection strings
 
-```env
-ENABLE_HTTPS_REDIRECT=true
-```
+## 4.2 Create backend web service
 
-## Stage R4: Health check and deploy
+1. New -> Web Service
+2. Connect repo
+3. Root directory: `fastapi`
+4. Runtime: `Docker`
+5. Branch: deployment branch (`main` recommended)
+6. Health check path: `/api/v1/health/ready`
 
-1. Set health check path:
+No custom start command needed (Dockerfile handles `PORT` + workers).
 
-```text
-/api/v1/health/ready
-```
+## 4.3 Set backend environment (Render)
 
-2. Trigger deploy.
-3. Watch logs until startup completes.
+Set all variables from Section 3.
 
-Expected startup behavior:
+Minimum production set:
 
-1. `docker-entrypoint.sh` runs migrations when `RUN_DB_MIGRATIONS=true`
-2. app starts with `python manage.py run ...`
-3. health check becomes healthy
+1. Core runtime + DB + auth
+2. Host/CORS values
+3. Razorpay keys + webhook secret
+4. Redis block if using session/caching
 
-## Stage R5: Verify deployment
+Deploy and watch logs:
 
-1. Open service URL root:
+Expected startup sequence:
 
-```text
-https://your-service.onrender.com/
-```
+1. `python manage.py upgrade head` (if `RUN_DB_MIGRATIONS=true`)
+2. `python manage.py seed-if-needed` (if `AUTO_BOOTSTRAP_STAFF=true`)
+3. app starts with `python manage.py run --host 0.0.0.0 --port ${PORT}`
 
-2. Verify API:
+## 4.4 Verify backend
 
 ```bash
-curl -s https://your-service.onrender.com/api/v1/health
-curl -s https://your-service.onrender.com/api/v1/health/ready
+curl -s https://your-backend.onrender.com/api/v1/health
+curl -s https://your-backend.onrender.com/api/v1/health/ready
 ```
 
-3. (If docs enabled) verify Swagger at `/docs`.
+Check login + profile:
 
-## Stage R6: Connect React frontend
+1. `POST /api/v1/auth/login`
+2. `GET /api/v1/auth/me`
+3. `POST /api/v1/auth/logout`
 
-Set frontend env:
+## 4.5 Razorpay webhook on Render
 
-```env
-VITE_API_BASE_URL=https://your-service.onrender.com/api/v1
-```
+Webhook URL:
 
-Redeploy frontend.
+- `https://<your-backend-domain>/api/v1/orders/payment/razorpay/webhook`
 
-## Stage R7: Add custom domain
+Set webhook events:
 
-1. In Render service -> `Settings` -> `Custom Domains`.
-2. Add `api.example.com`.
-3. Update DNS records as instructed by Render.
-4. Wait for SSL issuance.
-5. Update `ALLOWED_HOSTS` and frontend API base URL to custom domain.
+1. `payment.captured`
+2. `order.paid`
 
-## Stage R8: Render production operations
+Critical requirement:
 
-1. Keep `RUN_SEED=false` after first setup.
-2. Keep at least one instance running.
-3. Use Render logs + metrics for monitoring.
-4. If deploy fails, rollback to previous deploy from Render dashboard.
+- Razorpay webhook secret must exactly match `RAZORPAY_WEBHOOK_SECRET` env var.
 
-## Stage R9: Deploy frontend on Render Static Site
+Configure separately for Test mode and Live mode in Razorpay dashboard.
 
-Use this for the `ecom/react` Vite app.
+## 4.6 Deploy frontend on Render Static Site
 
-1. In Render, create `Static Site`.
-2. Connect the same repository.
-3. Configure:
-   - Root directory: `react`
-   - Build command: `npm ci && npm run build`
-   - Publish directory: `dist`
-4. Add environment variable:
-
-```env
-VITE_API_BASE_URL=https://your-api-domain.com/api/v1
-```
-
-5. Add SPA rewrite rule:
+1. New -> Static Site
+2. Root directory: `react`
+3. Build command: `npm ci && npm run build`
+4. Publish directory: `dist`
+5. Set env: `VITE_API_BASE_URL=https://your-backend-domain/api/v1`
+6. Add SPA rewrite rule:
    - Source: `/*`
    - Destination: `/index.html`
    - Action: `Rewrite`
-6. Deploy and verify:
-   - `https://your-frontend.onrender.com/`
-   - Login/register
-   - Catalog loading
-   - Checkout and payment pages
-   - Admin pages (`/admin/*`) render with routing refresh support
 
----
+Verify routes including refresh:
 
-## Track B: Deploy to AWS (App Runner + ECR + RDS)
+- `/catalog`
+- `/orders/:id`
+- `/admin/*`
 
-This path keeps operations simple while staying fully in AWS.
+## 4.7 Render operations guidance
 
-## Stage A1: AWS prerequisites
+1. Keep `RUN_SEED=false` after initial setup
+2. Keep `AUTO_BOOTSTRAP_STAFF=true` for safe first-deploy bootstrap behavior
+3. Rollback using Render deployment history if needed
 
-1. AWS account and IAM user/role with permissions for:
-   - ECR
-   - App Runner
-   - RDS
-   - VPC
-   - CloudWatch Logs
-   - Secrets Manager
-2. AWS CLI configured:
+## 5) Track B: Deploy to AWS (App Runner + ECR + RDS)
 
-```bash
-aws configure
-```
+## 5.1 Prerequisites
 
-3. Docker installed locally.
+1. IAM permissions for ECR, App Runner, RDS, VPC, CloudWatch, Secrets Manager
+2. AWS CLI configured
+3. Docker installed
 
-Set shell variables:
+Set vars:
 
 ```bash
 export AWS_REGION=us-east-1
@@ -347,323 +276,189 @@ export AWS_ACCOUNT_ID=$(aws sts get-caller-identity --query Account --output tex
 export ECR_REPO=ecom-api
 ```
 
-## Stage A2: Create ECR repository
+## 5.2 Build and push backend image
 
 ```bash
-aws ecr create-repository \
-  --repository-name "$ECR_REPO" \
-  --region "$AWS_REGION"
-```
+aws ecr create-repository --repository-name "$ECR_REPO" --region "$AWS_REGION"
 
-## Stage A3: Build and push Docker image to ECR
-
-From `ecom/fastapi`:
-
-```bash
 aws ecr get-login-password --region "$AWS_REGION" | \
   docker login --username AWS --password-stdin "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com"
 
+cd fastapi
 docker build -t "$ECR_REPO:latest" .
-
-docker tag "$ECR_REPO:latest" \
-  "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest"
-
+docker tag "$ECR_REPO:latest" "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest"
 docker push "$AWS_ACCOUNT_ID.dkr.ecr.$AWS_REGION.amazonaws.com/$ECR_REPO:latest"
 ```
 
-## Stage A4: Create RDS PostgreSQL
+## 5.3 Create data services
 
-Use AWS Console (recommended for first deployment):
+1. RDS PostgreSQL
+2. (Recommended) ElastiCache Redis
 
-1. Go to RDS -> Create database.
-2. Engine: PostgreSQL.
-3. Template: Production (or Dev/Test for cheaper setup).
-4. Place DB in private subnets.
-5. Create security group `rds-sg` allowing inbound `5432` only from App Runner connector SG.
-6. Save endpoint, username, db name, password.
+Use private networking and security groups allowing only app-tier access.
 
-Construct SQLAlchemy URL:
+## 5.4 Create App Runner service
 
-```text
-postgresql+psycopg://DB_USER:DB_PASSWORD@RDS_ENDPOINT:5432/DB_NAME
-```
+1. Source: ECR image
+2. Port: `8000`
+3. Health check: `/api/v1/health/ready`
+4. Attach VPC connector (for private RDS/Redis)
 
-## Stage A5: Create secrets in Secrets Manager
+Set env vars from Section 3.
 
-Store sensitive values:
+Recommended secrets via Secrets Manager:
 
-```bash
-aws secretsmanager create-secret \
-  --name ecom/prod/jwt_secret \
-  --secret-string "$(python - <<'PY'
-import secrets
-print(secrets.token_urlsafe(64))
-PY
-)" \
-  --region "$AWS_REGION"
+1. `JWT_SECRET_KEY`
+2. `DEFAULT_ADMIN_PASSWORD`
+3. `DATABASE_URL`
+4. `REDIS_URL`
+5. `RAZORPAY_KEY_SECRET`
+6. `RAZORPAY_WEBHOOK_SECRET`
 
-aws secretsmanager create-secret \
-  --name ecom/prod/admin_password \
-  --secret-string "$(python - <<'PY'
-import secrets
-print(secrets.token_urlsafe(24))
-PY
-)" \
-  --region "$AWS_REGION"
-```
+## 5.5 Frontend on AWS
 
-You can also store `DATABASE_URL` as a secret.
+Option A: Amplify Hosting
 
-## Stage A6: Create App Runner service
+1. Connect repo
+2. App root: `react`
+3. Build: `npm ci && npm run build`
+4. Artifacts: `dist`
+5. Env: `VITE_API_BASE_URL=https://api.example.com/api/v1`
+6. SPA rewrite: `/<*> -> /index.html (200 rewrite)`
 
-1. Open App Runner -> `Create service`.
-2. Source: `Container registry` -> `Amazon ECR`.
-3. Select image: `$ECR_REPO:latest`.
-4. Deployment trigger: manual first, then automatic if desired.
-5. Service settings:
-   - Port: `8000`
-   - Health check path: `/api/v1/health/ready`
-   - CPU/Memory: start with 1 vCPU / 2 GB
+Option B: S3 + CloudFront
 
-## Stage A7: Configure App Runner environment
-
-Set plain env vars:
-
-```env
-APP_ENV=production
-DEBUG=false
-ENABLE_DOCS=false
-DATABASE_URL=postgresql+psycopg://...
-ALLOWED_HOSTS=your-apprunner-domain.awsapprunner.com,api.example.com
-CORS_ORIGINS=https://your-frontend-domain.com
-UVICORN_WORKERS=2
-RUN_DB_MIGRATIONS=true
-RUN_SEED=false
-```
-
-Set secret env vars from Secrets Manager:
-
-```env
-JWT_SECRET_KEY -> arn:aws:secretsmanager:...
-DEFAULT_ADMIN_PASSWORD -> arn:aws:secretsmanager:...
-```
-
-## Stage A8: Networking (critical for RDS private access)
-
-1. Create App Runner VPC Connector in same VPC as RDS.
-2. Attach security group `apprunner-sg` to connector.
-3. In `rds-sg`, allow inbound `5432` from `apprunner-sg` only.
-4. Attach connector to App Runner service.
-
-## Stage A9: Deploy and verify
-
-1. Deploy service.
-2. Watch CloudWatch logs.
-3. Verify:
-
-```bash
-curl -s https://YOUR_APP_RUNNER_URL/api/v1/health
-curl -s https://YOUR_APP_RUNNER_URL/api/v1/health/ready
-```
-
-## Stage A10: Domain + TLS
-
-1. App Runner -> Custom domains.
-2. Add `api.example.com`.
-3. Create DNS records in Route 53 or your DNS provider.
-4. Wait until TLS certificate is active.
-5. Update `ALLOWED_HOSTS` + frontend API URL.
-
-## Stage A11: AWS production operations
-
-1. Keep migration strategy controlled:
-   - Recommended: run migration in pipeline/job before scaling out.
-2. Keep `RUN_SEED=false` except initial provisioning.
-3. Enable CloudWatch alarms for:
-   - 5xx rate
-   - latency
-   - instance count saturation
-4. Rotate secrets periodically in Secrets Manager.
-5. Tag all resources for cost tracking.
-
-## Stage A12: Deploy frontend on AWS
-
-You can choose one of two AWS frontend hosting paths.
-
-### Option 1: AWS Amplify Hosting (recommended)
-
-1. Open AWS Amplify -> `Host web app`.
-2. Connect your Git repository.
-3. Set app root to `react`.
-4. Add build spec (`amplify.yml`) or configure:
-   - Install: `npm ci`
-   - Build: `npm run build`
-   - Artifacts: `dist`
-5. Add environment variable:
-
-```env
-VITE_API_BASE_URL=https://api.example.com/api/v1
-```
-
-6. Add SPA rewrite/redirect rule:
-   - Source address: `/<*>`
-   - Target address: `/index.html`
-   - Type: `200 (Rewrite)`
-7. Deploy and test all routes including `/admin/orders` and `/orders/:orderId`.
-
-### Option 2: S3 + CloudFront
-
-1. Build frontend locally from `ecom/react`:
-
-```bash
-npm ci
-VITE_API_BASE_URL=https://api.example.com/api/v1 npm run build
-```
-
-2. Create S3 bucket for static hosting.
-3. Upload `dist/` contents.
-4. Create CloudFront distribution pointing to S3.
-5. Configure custom error responses for SPA:
+1. Build in `react`
+2. Upload `dist/`
+3. Configure CloudFront SPA fallback:
    - `403 -> /index.html (200)`
    - `404 -> /index.html (200)`
-6. Add custom domain + ACM certificate.
-7. In backend, set:
-   - `CORS_ORIGINS=https://your-frontend-domain.com`
-   - `ALLOWED_HOSTS` includes backend domain
-8. Invalidate CloudFront cache after each release:
+4. Invalidate cache after deploy
 
-```bash
-aws cloudfront create-invalidation --distribution-id YOUR_DIST_ID --paths "/*"
-```
+## 6) Payment Setup Checklist (Razorpay)
 
----
+1. Generate API keys in dashboard
+2. Set backend env vars (`RAZORPAY_KEY_ID`, `RAZORPAY_KEY_SECRET`)
+3. Create webhook to backend URL
+4. Set webhook secret and mirror it in backend env
+5. Verify flows in staging:
+   - UPI success/failure
+   - card success/failure
+   - webhook callback processing
 
-## Stage 4: Post-deploy verification checklist (both platforms)
+Razorpay links:
 
-1. Health endpoints return 200.
-2. Register/login flow works.
-3. Product list endpoint responds.
-4. Cart -> checkout flow works.
-5. Payment gateway options endpoint works: `GET /api/v1/orders/payment-gateways/free`.
-6. Payment quote works: `POST /api/v1/orders/{order_id}/payment/quote`.
-7. Razorpay create-order endpoint works: `POST /api/v1/orders/{order_id}/payment/razorpay/order`.
-8. Razorpay verify endpoint works: `POST /api/v1/orders/{order_id}/payment/razorpay/verify`.
-9. Razorpay webhook is accepted with valid signature.
-10. DB writes persist after restart.
-11. Frontend can call backend from production domain.
-12. CORS errors are not present.
-13. TLS certificate valid.
-14. React SPA route refresh works (`/catalog`, `/orders/1`, `/admin/users`).
-15. Admin-only pages are blocked for non-admin users.
-16. Payment quote and verify responses are reflected in UI.
+- Keys: `https://dashboard.razorpay.com/app/keys`
+- Webhooks: `https://dashboard.razorpay.com/app/webhooks`
+- API key docs: `https://razorpay.com/docs/payments/dashboard/account-settings/api-keys/`
+- Webhook docs: `https://razorpay.com/docs/webhooks`
 
-## Stage 5: Common failure cases and fixes
+## 7) Post-Deployment Verification Checklist
 
-### Failure: `JWT_SECRET_KEY must be changed in production`
+1. `GET /api/v1/health` = 200
+2. `GET /api/v1/health/ready` = 200
+3. Register/login/me/logout flows work
+4. Product list and category list load
+5. DummyJSON import works with valid range (`limit <= 500`)
+6. Cart -> checkout flow works
+7. `GET /api/v1/orders/payment-gateways/free` returns Razorpay providers
+8. `POST /api/v1/orders/{order_id}/payment/quote` works
+9. `POST /api/v1/orders/{order_id}/payment/razorpay/order` works
+10. `POST /api/v1/orders/{order_id}/payment/razorpay/verify` works
+11. Webhook callback is accepted with valid signature
+12. Frontend route refresh works without JS asset 404s
+13. CORS errors absent in browser console
+14. Session cookie behavior works as expected (if Redis enabled)
 
-Cause: production env but still default secret.
+## 8) Common Failure Cases and Fixes
 
-Fix: set real values (without angle brackets):
+## 8.1 `Invalid host header`
 
-```bash
-export JWT_SECRET_KEY='real-secret-value'
-export DEFAULT_ADMIN_PASSWORD='real-admin-password'
-export SEED_DEMO_USERS=false
-```
+Cause:
 
-### Failure: `Address already in use` on port 8000
-
-Cause: another app already running on that port.
+- backend `ALLOWED_HOSTS` missing deployed host/domain
 
 Fix:
 
-```bash
-ss -ltnp | rg ':8000'
-pkill -f "uvicorn app.main:app"
-```
+- set `ALLOWED_HOSTS` to include backend host(s)
 
-### Failure: Docs blocked by CSP
+## 8.2 White page on refresh + `index-*.js` 404
 
-Cause: strict CSP applied to docs page.
+Cause:
 
-Fix: already handled in middleware by docs-specific CSP. If custom CSP is changed later, allow Swagger/ReDoc assets.
-
-### Failure: Payment quote shows tax but final order stays unpaid
-
-Cause: Razorpay verify/webhook step was not completed after checkout popup.
-
-Fix:
-1. Ensure frontend calls `/payment/razorpay/verify` after checkout success callback.
-2. Ensure webhook secret matches dashboard secret.
-3. Ensure webhook endpoint is reachable publicly.
-
-### Failure: `CORS` blocked in browser
-
-Cause: frontend domain missing in `CORS_ORIGINS`.
-
-Fix: add exact frontend origin (including `https://`).
-
-### Failure: blank white page on refresh + `index-*.js` 404
-
-Cause: frontend static hosting is not serving SPA routes/assets correctly (usually wrong publish directory, missing rewrite, or stale cached build artifacts).
-
-Fix (Render Static Site):
-
-1. Root directory must be `react`.
-2. Build command must be `npm ci && npm run build`.
-3. Publish directory must be `dist`.
-4. Add rewrite rule `/* -> /index.html` with action `Rewrite`.
-5. Clear build cache and redeploy once.
-6. Do a hard refresh in browser after deploy.
-
-Also ensure frontend env is set at build time:
-
-```env
-VITE_API_BASE_URL=https://your-backend-domain/api/v1
-```
-
-### Failure: DummyJSON import fails from admin/vendor page
-
-Cause patterns:
-
-1. User is not `admin` or `vendor` (endpoint is staff-only).
-2. Backend cannot reach `https://dummyjson.com` from runtime network/TLS.
-3. Frontend calls wrong backend URL (`VITE_API_BASE_URL` mismatch).
+- static host not configured for SPA rewrite or wrong publish dir/build root
 
 Fix:
 
-1. Confirm login user role is `admin` or `vendor`.
-2. Confirm backend env includes correct CORS origin for frontend domain:
-   `CORS_ORIGINS=https://your-frontend-domain`.
-3. Open backend logs while triggering import; API now returns detailed upstream errors (HTTP code/network/timeout).
-4. Redeploy backend after Docker image update (includes CA certificates for outbound HTTPS).
+1. root `react`
+2. build `npm ci && npm run build`
+3. publish `dist`
+4. rewrite `/* -> /index.html`
+5. clear build/cache and redeploy
 
-### Failure: DB connection refused
+## 8.3 DummyJSON import 422
 
-Cause: wrong `DATABASE_URL` or network path blocked.
+Cause:
+
+1. request `limit` outside `1..500`
+2. malformed payload
 
 Fix:
 
-1. Validate credentials and host.
-2. Validate SG/network rules (AWS).
-3. Confirm managed DB service is healthy.
+- send valid `limit` and `skip`, batch large imports
 
----
+## 8.4 Payment stays unpaid after successful checkout popup
 
-## Stage 6: CI/CD recommendation (short)
+Cause:
 
-Pipeline order:
+1. verify endpoint not called after success callback
+2. webhook secret mismatch
+3. webhook URL not reachable
 
-1. Run tests (`pytest`).
-2. Build Docker image.
-3. Push image (ECR or Git-backed Render deploy).
-4. Run DB migration.
-5. Deploy application.
-6. Run smoke tests against `/api/v1/health/ready`.
+Fix:
 
----
+1. ensure frontend calls `POST /api/v1/orders/{order_id}/payment/razorpay/verify`
+2. match `RAZORPAY_WEBHOOK_SECRET` exactly
+3. verify public webhook endpoint accessibility
 
-## Official references
+## 8.5 Cookie/session not persisting
+
+Cause:
+
+1. Redis disabled/unreachable
+2. incorrect cookie same-site/domain setup
+3. missing `allow_credentials` usage patterns across frontend/backend
+
+Fix:
+
+1. set `REDIS_ENABLED=true` and valid `REDIS_URL`
+2. choose correct `SESSION_COOKIE_SAMESITE` and `SESSION_COOKIE_DOMAIN`
+3. keep frontend requests with `credentials: 'include'`
+
+## 8.6 DB connection refused
+
+Cause:
+
+- invalid `DATABASE_URL` / network rules
+
+Fix:
+
+1. validate credentials and host
+2. check private networking/security groups
+3. confirm DB service health
+
+## 9) CI/CD Recommendation
+
+Recommended pipeline order:
+
+1. run backend tests (`pytest -q`)
+2. run frontend build (`npm run build`)
+3. build/push backend image
+4. deploy backend with migrations
+5. deploy frontend
+6. run smoke checks (`/health`, `/health/ready`, login)
+
+## 10) Official References
 
 Render:
 
@@ -685,40 +480,3 @@ AWS:
 - https://docs.aws.amazon.com/secretsmanager/latest/userguide/intro.html
 - https://docs.aws.amazon.com/amplify/latest/userguide/welcome.html
 - https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html
-
-## Stage R10: Real payment gateway wiring checklist (Razorpay)
-
-1. Create production merchant account in Razorpay.
-2. Generate live API credentials from Razorpay dashboard.
-3. Set credentials as environment variables in backend service:
-   - `RAZORPAY_KEY_ID`
-   - `RAZORPAY_KEY_SECRET`
-   - `RAZORPAY_WEBHOOK_SECRET`
-4. Validate critical flows in staging:
-   - UPI success/failure
-   - Card success/failure
-   - refund/cancel webhooks (if enabled in your gateway setup)
-
-Razorpay webhook URL to configure in dashboard:
-
-- `https://<your-backend-domain>/api/v1/orders/payment/razorpay/webhook`
-
-Razorpay console links:
-
-- API keys: `https://dashboard.razorpay.com/app/keys`
-- Webhooks: `https://dashboard.razorpay.com/app/webhooks`
-- API docs: `https://razorpay.com/docs/api/`
-- API key guide: `https://razorpay.com/docs/payments/dashboard/account-settings/api-keys/`
-- Webhook guide: `https://razorpay.com/docs/webhooks`
-
-Current codebase already calls Razorpay APIs from backend and verifies payment signatures before marking orders as paid.
-
-## Stage R11: Can I deploy on GitHub Pages?
-
-- React frontend: yes (static build only).
-- FastAPI backend: no (GitHub Pages cannot run server-side Python apps).
-- Recommended setup:
-  1. Deploy backend on Render/AWS.
-  2. Deploy frontend on GitHub Pages/Render Static.
-  3. Set `VITE_API_BASE_URL` to deployed backend URL.
-  4. Add frontend domain in backend `CORS_ORIGINS`.

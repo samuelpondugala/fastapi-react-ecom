@@ -1,13 +1,44 @@
 # Ecom Full Stack (FastAPI + React)
 
-Repository structure:
+A production-oriented e-commerce project with:
 
-- `fastapi/` Backend API (FastAPI, SQLAlchemy, Alembic, tests)
-- `react/` Frontend UI (Vite + React + JavaScript)
-- `schema.drawio` Database ER design
-- `DEPLOYMENT_GUIDE_RENDER_AWS.md` Detailed deployment guide
+- FastAPI backend (`fastapi/`)
+- React + Vite frontend (`react/`)
+- PostgreSQL-ready schema + Alembic migrations
+- Redis-backed sessions/caching (optional, recommended in production)
+- Razorpay payment integration (UPI/Card)
+- CI checks for backend tests and frontend build
 
-## Quick Start (Local)
+## Repository Structure
+
+- `fastapi/` backend API, models, migrations, tests, Docker runtime
+- `react/` frontend SPA (storefront + vendor/admin panels)
+- `.github/workflows/ci.yml` CI pipeline
+- `DEPLOYMENT_GUIDE_RENDER_AWS.md` deployment runbook
+- `documentation.md` full technical documentation
+- `presentation.md` presentation slide material
+- `schema.drawio.png` schema diagram
+- `react/architecture.drawio.png` architecture diagram
+
+## Key Features
+
+- Auth and roles: `customer`, `vendor`, `admin`
+- Catalog: categories, products, variants, images
+- Cart and checkout with delivery and coupons
+- Payment flow via Razorpay:
+  - create order
+  - frontend checkout popup
+  - backend signature verification
+  - webhook reconciliation
+- Product import:
+  - from `dummyjson.com`
+  - from pasted/manual JSON payload
+- API protection:
+  - JWT bearer auth
+  - Redis-backed HttpOnly cookie session fallback
+- Redis caching for high-read catalog endpoints
+
+## Local Quick Start
 
 ## 1) Backend
 
@@ -39,84 +70,66 @@ npm run dev
 Frontend:
 
 - App: `http://localhost:5173`
-- Backend base URL (env): `VITE_API_BASE_URL=http://localhost:8000/api/v1`
+- Backend base URL: `VITE_API_BASE_URL=http://localhost:8000/api/v1`
 
-## Admin Panel
+## Demo Accounts
 
-Frontend admin routes:
+After `python manage.py seed`:
 
-- `/admin`
-- `/admin/users`
-- `/admin/categories`
-- `/admin/products`
-- `/admin/coupons`
-- `/admin/orders`
+- Admin: `ecomadmin` / `ecom@123admin`
+- Vendor: `ecomvendor` / `ecom@123vendor`
 
-You must login as an admin user to access these pages.
+## Product Import Notes
 
-Seeded demo users after `python manage.py seed`:
+- API endpoint: `POST /api/v1/products/import/dummyjson`
+- `limit` is validated in range `1..500`
+- For more than 500 products, import in batches with `skip`
 
-- Admin username: `ecomadmin` (password: `ecom@123admin`)
-- Vendor username: `ecomvendor` (password: `ecom@123vendor`)
-
-Admin URL:
-
-- `http://localhost:5173/admin`
-
-Vendor product studio URL:
-
-- `http://localhost:5173/vendor/products`
-
-## Payment Behavior
-
-- Payment modes supported in flow:
-  - UPI (`razorpay_upi`)
-  - Credit/Debit Cards (`razorpay_card`)
-- Checkout delivery policy:
-  - Subtotal `< INR 1000` -> delivery charge `INR 100`
-  - Subtotal `>= INR 1000` -> free delivery
-- Coupon can be applied in checkout and is persisted in backend order totals
-- Tax is still quoted at payment step (`POST /orders/{id}/payment/quote`)
-- Money display is standardized to INR and timestamps are shown in IST on frontend
-- Real Razorpay flow is wired:
-  - create checkout order
-  - open Razorpay popup from frontend
-  - verify payment signature on backend
-  - optional webhook callback endpoint for server-side reconciliation
-- Redis-backed browser sessions and API caching are available via backend env settings
-
-## Dummy Data Import
-
-Sample DummyJSON product payload file:
-
-- `dummyjson_products_sample.json` (root)
-- `fastapi/sample_dummyjson_products.json` (backend folder copy)
-
-Import using CLI:
+Example CLI import:
 
 ```bash
 cd fastapi
 source .venv/bin/activate
-python manage.py import-products --from-dummyjson --limit 20 --skip 0
-python manage.py import-products --file sample_dummyjson_products.json
-python manage.py normalize-inr --dry-run
-python manage.py normalize-inr --rate 83
+python manage.py import-products --from-dummyjson --limit 500 --skip 0
+python manage.py import-products --from-dummyjson --limit 500 --skip 500
 ```
 
-Import from frontend:
+## Payment Notes
 
-- Login as `ecomadmin` or `ecomvendor`
-- Open `/vendor/products` or `/admin/products`
-- Use `Import from dummyjson.com` or paste JSON in the import textarea
+Enabled payment providers:
 
-## Documentation
+- `razorpay_upi`
+- `razorpay_card`
 
-- Backend setup and API details: `fastapi/README.md`
-- Frontend setup and route coverage: `react/README.md`
-- Cloud deployment (Render + AWS): `DEPLOYMENT_GUIDE_RENDER_AWS.md`
+Primary endpoints:
 
-## Hosting Note (GitHub Pages)
+- `POST /api/v1/orders/{id}/payment/razorpay/order`
+- `POST /api/v1/orders/{id}/payment/razorpay/verify`
+- `POST /api/v1/orders/payment/razorpay/webhook`
 
-- You can deploy the React frontend to GitHub Pages.
-- You cannot run FastAPI backend on GitHub Pages (static-only hosting).
-- Deploy backend to Render/AWS/Railway/Fly.io and set `VITE_API_BASE_URL` to that backend URL.
+Legacy endpoint:
+
+- `POST /api/v1/orders/{id}/pay` exists but intentionally returns an error for real gateways.
+
+## Redis Session/Cookie Notes
+
+When Redis is enabled:
+
+- login sets HttpOnly session cookie (`SESSION_COOKIE_NAME`)
+- auth dependency can resolve user from bearer token or session cookie
+- logout clears session cookie and Redis session key
+- category/product list/detail responses can be cached
+
+## CI Pipeline
+
+GitHub Actions workflow (`.github/workflows/ci.yml`) runs:
+
+- FastAPI tests (`pytest -q`)
+- React production build (`npm run build`)
+
+## Deployment
+
+- Full deployment guide: `DEPLOYMENT_GUIDE_RENDER_AWS.md`
+- Backend service example: `https://fastapi-react-ecom.onrender.com`
+- Razorpay webhook URL format:
+  - `https://<your-backend-domain>/api/v1/orders/payment/razorpay/webhook`
