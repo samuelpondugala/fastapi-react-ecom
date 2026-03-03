@@ -10,6 +10,40 @@ function createError(status, message, data) {
   return error;
 }
 
+function formatValidationIssue(issue) {
+  if (issue == null) return '';
+  if (typeof issue === 'string') return issue;
+  if (typeof issue !== 'object') return String(issue);
+
+  const loc = Array.isArray(issue.loc) ? issue.loc.join('.') : '';
+  const msg = typeof issue.msg === 'string' ? issue.msg : '';
+  if (loc && msg) return `${loc}: ${msg}`;
+  if (msg) return msg;
+  if (typeof issue.detail === 'string') return issue.detail;
+
+  try {
+    return JSON.stringify(issue);
+  } catch {
+    return 'Unknown error';
+  }
+}
+
+function normalizeErrorMessage(data, fallback) {
+  if (typeof data === 'string') return data || fallback;
+  if (Array.isArray(data)) {
+    const joined = data.map(formatValidationIssue).filter(Boolean).join('; ');
+    return joined || fallback;
+  }
+  if (data && typeof data === 'object') {
+    if (typeof data.detail === 'string') return data.detail;
+    if (Array.isArray(data.detail)) return normalizeErrorMessage(data.detail, fallback);
+    if (data.detail && typeof data.detail === 'object') return normalizeErrorMessage(data.detail, fallback);
+    if (typeof data.message === 'string') return data.message;
+    return formatValidationIssue(data);
+  }
+  return fallback;
+}
+
 function buildQuery(params = {}) {
   const searchParams = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
@@ -43,7 +77,7 @@ async function request(path, { method = 'GET', token, body, query, headers = {},
   const data = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
-    const message = typeof data === 'string' ? data || response.statusText : data?.detail || data?.message;
+    const message = normalizeErrorMessage(data, response.statusText || 'Request failed');
     if (!suppressErrorToast) {
       errorToast(message || 'Request failed');
     }
