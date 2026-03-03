@@ -10,7 +10,7 @@ Production-oriented backend scaffold for your e-commerce project with:
 - Core e-commerce APIs: users, addresses, categories, products, cart, orders, coupons, reviews
 - Production middleware: security headers, optional trusted hosts, gzip, and HTTPS redirect
 - Test suite covering core success + failure scenarios (`tests/`)
-- Free built-in payment gateway flow with tax applied only at payment time
+- Real Razorpay payment flow (UPI/Card) with signature verification + webhook support
 - Checkout supports coupon codes and delivery charge policy (free >= INR 1000, else INR 100)
 - Companion React + Vite frontend in `../react` with storefront and admin panel
 
@@ -129,7 +129,7 @@ const productsRes = await fetch(`${baseURL}/products`, {
 const products = await productsRes.json();
 ```
 
-### Payment flow (UPI/Card/EMI/Pay Later/COD + sandbox)
+### Payment flow (Razorpay UPI/Card)
 
 1. Create order from cart:
 
@@ -143,47 +143,58 @@ POST /api/v1/orders/checkout
 POST /api/v1/orders/{order_id}/payment/quote
 ```
 
-3. Pay order (tax is applied here, not at checkout):
+3. Create Razorpay checkout order:
 
 ```http
-POST /api/v1/orders/{order_id}/pay
+POST /api/v1/orders/{order_id}/payment/razorpay/order
 ```
 
-Example pay request body:
+4. Open Razorpay Checkout in frontend using returned `key_id` + `razorpay_order_id`.
 
-```json
-{
-  "provider": "razorpay_upi",
-  "apply_tax": true,
-  "tax_mode": "percent",
-  "tax_value": "18.00"
-}
+5. Verify payment signature:
+
+```http
+POST /api/v1/orders/{order_id}/payment/razorpay/verify
 ```
 
 Available providers:
 
 - `razorpay_upi`
-- `paytm_upi`
 - `razorpay_card`
-- `emi_plan`
-- `pay_later`
-- `cod`
-- `manual_free` (always succeeds, no external account needed)
-- `mock_free` (supports `simulate_failure=true` for testing failure handling)
 
 Real gateway credential placeholders in `.env`:
 
 - `RAZORPAY_KEY_ID`
 - `RAZORPAY_KEY_SECRET`
 - `RAZORPAY_WEBHOOK_SECRET`
-- `PAYTM_MERCHANT_ID`
-- `PAYTM_MERCHANT_KEY`
+
+Razorpay setup docs:
+
+- API keys: `https://razorpay.com/docs/payments/dashboard/account-settings/api-keys/`
+- Webhooks: `https://razorpay.com/docs/webhooks`
 
 Razorpay end-to-end endpoints:
 
 - `POST /api/v1/orders/{order_id}/payment/razorpay/order` (create Razorpay order)
 - `POST /api/v1/orders/{order_id}/payment/razorpay/verify` (signature verification + mark paid)
 - `POST /api/v1/orders/payment/razorpay/webhook` (server-side webhook callback)
+- `POST /api/v1/orders/{order_id}/pay` is kept as a legacy endpoint and intentionally returns an error for real gateways
+
+### Redis sessions + caching (recommended for production)
+
+Enable Redis to support:
+
+- HttpOnly browser session cookies (server-side session storage)
+- Read-heavy API response caching (categories/products)
+
+Required envs:
+
+- `REDIS_ENABLED=true`
+- `REDIS_URL=redis://...`
+- `SESSION_COOKIE_SECURE=true` (for HTTPS)
+- `SESSION_COOKIE_SAMESITE=none` (if frontend and backend are on different domains)
+- `SESSION_COOKIE_DOMAIN` (optional cross-subdomain cookie scope)
+- `SESSION_TTL_SECONDS` and `CACHE_TTL_SECONDS` for tuning
 
 ### Product import (DummyJSON + manual JSON)
 
@@ -256,6 +267,7 @@ python manage.py normalize-inr --rate 83
 - `POST /api/v1/auth/register`
 - `POST /api/v1/auth/login`
 - `GET /api/v1/auth/me`
+- `POST /api/v1/auth/logout`
 - `GET /api/v1/categories`
 - `GET /api/v1/products`
 - `POST /api/v1/products/import/dummyjson`
@@ -265,6 +277,8 @@ python manage.py normalize-inr --rate 83
 - `POST /api/v1/orders/checkout`
 - `GET /api/v1/orders/payment-gateways/free`
 - `POST /api/v1/orders/{order_id}/payment/quote`
-- `POST /api/v1/orders/{order_id}/pay`
+- `POST /api/v1/orders/{order_id}/payment/razorpay/order`
+- `POST /api/v1/orders/{order_id}/payment/razorpay/verify`
+- `POST /api/v1/orders/payment/razorpay/webhook`
 - `GET /api/v1/orders/me`
 - `POST /api/v1/reviews`

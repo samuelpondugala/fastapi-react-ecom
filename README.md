@@ -70,23 +70,20 @@ Vendor product studio URL:
 ## Payment Behavior
 
 - Payment modes supported in flow:
-  - UPI (`razorpay_upi`, `paytm_upi`)
+  - UPI (`razorpay_upi`)
   - Credit/Debit Cards (`razorpay_card`)
-  - EMI (`emi_plan`)
-  - Pay Later (`pay_later`)
-  - COD (`cod`)
-- Sandbox/testing modes still available: `manual_free`, `mock_free`
 - Checkout delivery policy:
   - Subtotal `< INR 1000` -> delivery charge `INR 100`
   - Subtotal `>= INR 1000` -> free delivery
 - Coupon can be applied in checkout and is persisted in backend order totals
-- Tax is applied only at payment step (`POST /orders/{id}/pay`)
+- Tax is still quoted at payment step (`POST /orders/{id}/payment/quote`)
 - Money display is standardized to INR and timestamps are shown in IST on frontend
 - Real Razorpay flow is wired:
   - create checkout order
   - open Razorpay popup from frontend
   - verify payment signature on backend
   - optional webhook callback endpoint for server-side reconciliation
+- Redis-backed browser sessions and API caching are available via backend env settings
 
 ## Dummy Data Import
 

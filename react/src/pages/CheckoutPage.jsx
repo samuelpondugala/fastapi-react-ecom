@@ -35,27 +35,6 @@ const paymentOptions = [
     provider: 'razorpay_card',
     methods: ['Credit Card', 'Debit Card'],
   },
-  {
-    id: 'emi',
-    label: 'EMI',
-    description: 'Monthly installments by partner banks',
-    provider: 'emi_plan',
-    methods: ['3 months', '6 months', '12 months'],
-  },
-  {
-    id: 'pay_later',
-    label: 'Pay Later',
-    description: 'Deferred payment options',
-    provider: 'pay_later',
-    methods: ['Simple', 'Slice', 'LazyPay'],
-  },
-  {
-    id: 'cod',
-    label: 'Cash On Delivery',
-    description: 'Pay when your order arrives',
-    provider: 'cod',
-    methods: ['Cash', 'UPI at doorstep'],
-  },
 ];
 
 const partnerBanks = [
@@ -251,20 +230,6 @@ export default function CheckoutPage() {
         shipping_total: String(shippingCharge.toFixed(2)),
         tax_total: '0.00',
       });
-
-      if (selectedPaymentOption.provider === 'cod') {
-        await api.orders.payOrder(token, order.id, {
-          provider: 'cod',
-          currency: 'INR',
-          apply_tax: false,
-          tax_mode: 'none',
-          tax_value: '0.00',
-          metadata: { payment_option: paymentOptionId },
-        });
-        successToast('Order placed with Cash On Delivery.');
-        navigate(`/orders/${order.id}`);
-        return;
-      }
 
       successToast(`Order created. Continue with ${selectedPaymentOption.label} payment.`);
       navigate(`/orders/${order.id}?provider=${selectedPaymentOption.provider}`);

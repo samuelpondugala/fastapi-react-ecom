@@ -27,17 +27,14 @@ Stack:
   - Category management
   - Product creation + status updates
   - Coupon creation
-  - Order lookup + payment action
+  - Order lookup + Razorpay payment handoff
 - Payment flow supports:
-  - UPI (`razorpay_upi`, `paytm_upi`)
+  - UPI (`razorpay_upi`)
   - Credit/Debit (`razorpay_card`)
-  - EMI (`emi_plan`)
-  - Pay Later (`pay_later`)
-  - COD (`cod`)
-  - Sandbox (`manual_free`, `mock_free`)
 - Delivery policy in checkout: `< INR 1000` adds `INR 100`, else free
 - Prices rendered in INR; timestamps rendered in IST
 - For `razorpay_upi` / `razorpay_card`, frontend opens Razorpay Checkout popup and verifies signature through backend before marking order paid
+- API requests include browser credentials to support Redis-backed HttpOnly session cookies
 
 ## Route Map
 
@@ -85,7 +82,8 @@ The UI integrates these backend route groups:
 - `POST /orders/checkout`, `GET /orders/me`, `GET /orders/{id}`
 - `GET /orders/payment-gateways/free`
 - `POST /orders/{id}/payment/quote`
-- `POST /orders/{id}/pay`
+- `POST /orders/{id}/payment/razorpay/order`
+- `POST /orders/{id}/payment/razorpay/verify`
 - `GET/POST /coupons`
 - `GET /reviews/product/{product_id}`, `POST /reviews`
 

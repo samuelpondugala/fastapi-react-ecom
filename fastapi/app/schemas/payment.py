@@ -20,14 +20,8 @@ class PaymentGatewayRead(BaseModel):
 
 class OrderPaymentRequest(BaseModel):
     provider: Literal[
-        "manual_free",
-        "mock_free",
         "razorpay_upi",
         "razorpay_card",
-        "paytm_upi",
-        "emi_plan",
-        "pay_later",
-        "cod",
     ] = Field(
         default="razorpay_upi",
         description="Payment gateway option.",
@@ -48,10 +42,6 @@ class OrderPaymentRequest(BaseModel):
         description="For fixed: amount. For percent: percentage value (e.g. 18 for 18%).",
     )
 
-    simulate_failure: bool = Field(
-        default=False,
-        description="Only applicable to mock_free gateway for testing failed payment flows.",
-    )
     metadata: dict = Field(default_factory=dict)
 
     @model_validator(mode="after")

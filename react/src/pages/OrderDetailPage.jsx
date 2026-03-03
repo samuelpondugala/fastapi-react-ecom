@@ -35,12 +35,6 @@ function loadRazorpayCheckoutScript() {
 const paymentModeDefinitions = [
   { provider: 'razorpay_upi', label: 'UPI', description: 'Google Pay / PhonePe / Paytm UPI' },
   { provider: 'razorpay_card', label: 'Credit / Debit Card', description: 'Visa / MasterCard / RuPay / Amex' },
-  { provider: 'emi_plan', label: 'EMI', description: 'Installment plan via partner banks' },
-  { provider: 'pay_later', label: 'Pay Later', description: 'Deferred payment options' },
-  { provider: 'paytm_upi', label: 'Paytm UPI', description: 'Paytm UPI flow' },
-  { provider: 'cod', label: 'Cash On Delivery', description: 'Pay at delivery' },
-  { provider: 'manual_free', label: 'Manual (Internal)', description: 'Internal fallback gateway' },
-  { provider: 'mock_free', label: 'Mock Sandbox', description: 'QA simulation gateway' },
 ];
 
 const partnerBanks = [
@@ -61,7 +55,6 @@ const initialPaymentPayload = {
   apply_tax: false,
   tax_mode: 'none',
   tax_value: '0.00',
-  simulate_failure: false,
   metadata: {},
 };
 
@@ -103,6 +96,8 @@ export default function OrderDetailPage() {
   useEffect(() => {
     const providerFromQuery = searchParams.get('provider');
     if (!providerFromQuery) return;
+    const allowedProviders = new Set(paymentModeDefinitions.map((item) => item.provider));
+    if (!allowedProviders.has(providerFromQuery)) return;
     setPayload((prev) => ({ ...prev, provider: providerFromQuery }));
   }, [searchParams]);
 
@@ -126,112 +121,93 @@ export default function OrderDetailPage() {
   }
 
   async function submitPayment() {
-    const isRazorpayProvider = payload.provider === 'razorpay_upi' || payload.provider === 'razorpay_card';
-    if (isRazorpayProvider) {
-      setProcessingRazorpay(true);
-      try {
-        const scriptLoaded = await loadRazorpayCheckoutScript();
-        if (!scriptLoaded || !window.Razorpay) {
-          throw new Error('Unable to load Razorpay checkout script.');
-        }
-
-        const checkoutOrder = await api.orders.createRazorpayOrder(token, orderId, {
-          provider: payload.provider,
-          metadata: payload.metadata,
-        });
-
-        const method =
-          payload.provider === 'razorpay_upi'
-            ? {
-                upi: true,
-                card: false,
-                netbanking: false,
-                wallet: false,
-                emi: false,
-                paylater: false,
-              }
-            : {
-                upi: false,
-                card: true,
-                netbanking: false,
-                wallet: false,
-                emi: false,
-                paylater: false,
-              };
-
-        const razorpayOptions = {
-          key: checkoutOrder.key_id,
-          amount: checkoutOrder.amount,
-          currency: checkoutOrder.currency,
-          name: 'Commerce Studio',
-          description: `Order #${checkoutOrder.order_number}`,
-          order_id: checkoutOrder.razorpay_order_id,
-          method,
-          prefill: {
-            name: user?.full_name || undefined,
-            email: user?.email || undefined,
-          },
-          notes: {
-            internal_order_id: String(checkoutOrder.internal_order_id),
-          },
-          theme: {
-            color: '#008768',
-          },
-          handler: async (response) => {
-            try {
-              const result = await api.orders.verifyRazorpayPayment(token, orderId, {
-                provider: payload.provider,
-                razorpay_order_id: response.razorpay_order_id,
-                razorpay_payment_id: response.razorpay_payment_id,
-                razorpay_signature: response.razorpay_signature,
-                metadata: payload.metadata,
-              });
-              setPaymentResult(result);
-              setOrder(result.order);
-              setQuote(result.quote);
-              setError('');
-              successToast('Razorpay payment verified successfully.');
-            } catch (err) {
-              setError(err.message || 'Razorpay signature verification failed.');
-            } finally {
-              setProcessingRazorpay(false);
-            }
-          },
-          modal: {
-            ondismiss: () => {
-              setProcessingRazorpay(false);
-            },
-          },
-        };
-
-        const razorpay = new window.Razorpay(razorpayOptions);
-        razorpay.on('payment.failed', (event) => {
-          setProcessingRazorpay(false);
-          const message = event?.error?.description || 'Payment failed in Razorpay.';
-          setError(message);
-          errorToast(message);
-        });
-        razorpay.open();
-        return;
-      } catch (err) {
-        setProcessingRazorpay(false);
-        setError(err.message || 'Unable to start Razorpay checkout.');
-        return;
-      }
-    }
-
+    setProcessingRazorpay(true);
     try {
-      const result = await api.orders.payOrder(token, orderId, {
-        ...payload,
-        tax_value: payload.tax_value,
+      const scriptLoaded = await loadRazorpayCheckoutScript();
+      if (!scriptLoaded || !window.Razorpay) {
+        throw new Error('Unable to load Razorpay checkout script.');
+      }
+
+      const checkoutOrder = await api.orders.createRazorpayOrder(token, orderId, {
+        provider: payload.provider,
+        metadata: payload.metadata,
       });
-      setPaymentResult(result);
-      setOrder(result.order);
-      setQuote(result.quote);
-      setError('');
-      successToast('Payment processed successfully.');
+
+      const method =
+        payload.provider === 'razorpay_upi'
+          ? {
+              upi: true,
+              card: false,
+              netbanking: false,
+              wallet: false,
+              emi: false,
+              paylater: false,
+            }
+          : {
+              upi: false,
+              card: true,
+              netbanking: false,
+              wallet: false,
+              emi: false,
+              paylater: false,
+            };
+
+      const razorpayOptions = {
+        key: checkoutOrder.key_id,
+        amount: checkoutOrder.amount,
+        currency: checkoutOrder.currency,
+        name: 'Commerce Studio',
+        description: `Order #${checkoutOrder.order_number}`,
+        order_id: checkoutOrder.razorpay_order_id,
+        method,
+        prefill: {
+          name: user?.full_name || undefined,
+          email: user?.email || undefined,
+        },
+        notes: {
+          internal_order_id: String(checkoutOrder.internal_order_id),
+        },
+        theme: {
+          color: '#008768',
+        },
+        handler: async (response) => {
+          try {
+            const result = await api.orders.verifyRazorpayPayment(token, orderId, {
+              provider: payload.provider,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              metadata: payload.metadata,
+            });
+            setPaymentResult(result);
+            setOrder(result.order);
+            setQuote(result.quote);
+            setError('');
+            successToast('Razorpay payment verified successfully.');
+          } catch (err) {
+            setError(err.message || 'Razorpay signature verification failed.');
+          } finally {
+            setProcessingRazorpay(false);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            setProcessingRazorpay(false);
+          },
+        },
+      };
+
+      const razorpay = new window.Razorpay(razorpayOptions);
+      razorpay.on('payment.failed', (event) => {
+        setProcessingRazorpay(false);
+        const message = event?.error?.description || 'Payment failed in Razorpay.';
+        setError(message);
+        errorToast(message);
+      });
+      razorpay.open();
     } catch (err) {
-      setError(err.message || 'Payment failed.');
+      setProcessingRazorpay(false);
+      setError(err.message || 'Unable to start Razorpay checkout.');
     }
   }
 
@@ -427,15 +403,6 @@ export default function OrderDetailPage() {
                 />
               </label>
             </div>
-
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={payload.simulate_failure}
-                onChange={(event) => setField('simulate_failure', event.target.checked)}
-              />
-              Simulate failure (sandbox only)
-            </label>
 
             <div className="row-gap">
               <button className="btn btn--ghost" type="button" onClick={getQuote}>

@@ -22,24 +22,6 @@ RAZORPAY_API_BASE_URL = "https://api.razorpay.com/v1"
 
 FREE_PAYMENT_GATEWAYS: tuple[dict[str, object], ...] = (
     {
-        "code": "manual_free",
-        "name": "Manual Free",
-        "description": "Internal free gateway. No third-party signup, no gateway fee.",
-        "requires_external_account": False,
-        "gateway_fee_note": "No gateway fee",
-        "methods": ["manual"],
-        "category": "sandbox",
-    },
-    {
-        "code": "mock_free",
-        "name": "Mock Free Sandbox",
-        "description": "Simulation gateway for testing success/failure flows with zero gateway fee.",
-        "requires_external_account": False,
-        "gateway_fee_note": "No gateway fee",
-        "methods": ["manual"],
-        "category": "sandbox",
-    },
-    {
         "code": "razorpay_upi",
         "name": "Razorpay UPI",
         "description": "UPI collection flow via Razorpay integration (configured in production).",
@@ -56,42 +38,6 @@ FREE_PAYMENT_GATEWAYS: tuple[dict[str, object], ...] = (
         "gateway_fee_note": "Gateway fee depends on your Razorpay plan",
         "methods": ["credit_card", "debit_card"],
         "category": "card",
-    },
-    {
-        "code": "paytm_upi",
-        "name": "Paytm UPI",
-        "description": "UPI collection flow via Paytm integration (configured in production).",
-        "requires_external_account": True,
-        "gateway_fee_note": "Gateway fee depends on your Paytm plan",
-        "methods": ["upi"],
-        "category": "upi",
-    },
-    {
-        "code": "emi_plan",
-        "name": "EMI Plan",
-        "description": "Installment option handled by provider EMI rails.",
-        "requires_external_account": True,
-        "gateway_fee_note": "EMI charges vary by issuer/bank",
-        "methods": ["emi"],
-        "category": "emi",
-    },
-    {
-        "code": "pay_later",
-        "name": "Pay Later",
-        "description": "Deferred payment option (provider account required).",
-        "requires_external_account": True,
-        "gateway_fee_note": "Fee/interest depends on provider terms",
-        "methods": ["pay_later"],
-        "category": "pay_later",
-    },
-    {
-        "code": "cod",
-        "name": "Cash On Delivery",
-        "description": "Pay at delivery. Order is confirmed with COD pending status.",
-        "requires_external_account": False,
-        "gateway_fee_note": "No gateway fee",
-        "methods": ["cod"],
-        "category": "cod",
     },
 )
 
@@ -443,79 +389,15 @@ def process_order_payment(
     apply_tax: bool,
     tax_mode: str,
     tax_value: Decimal,
-    simulate_failure: bool,
     metadata: dict,
 ) -> tuple[Payment, Order, PaymentQuote]:
     if provider not in SUPPORTED_GATEWAYS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported payment gateway")
 
-    if order.payment_status == "paid":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order already paid")
-
-    quote = build_payment_quote(
-        order,
-        apply_tax=apply_tax,
-        tax_mode=tax_mode,
-        tax_value=Decimal(tax_value),
+    raise HTTPException(
+        status_code=status.HTTP_400_BAD_REQUEST,
+        detail=(
+            "Direct /pay is disabled for real gateways. "
+            "Use /orders/{order_id}/payment/razorpay/order and /orders/{order_id}/payment/razorpay/verify."
+        ),
     )
-
-    payment_status = "paid"
-    paid_at = datetime.now(timezone.utc)
-    order_payment_status = "paid"
-
-    # A controllable failure path for QA/UAT when using the mock gateway.
-    if provider == "mock_free" and simulate_failure:
-        payment_status = "failed"
-        paid_at = None
-        order_payment_status = "unpaid"
-
-    if provider == "cod":
-        payment_status = "pending"
-        paid_at = None
-        order_payment_status = "cod_pending"
-
-    payment = Payment(
-        order_id=order.id,
-        provider=provider,
-        transaction_ref=_build_transaction_ref(provider),
-        amount=quote.total_amount,
-        currency=currency,
-        status=payment_status,
-        paid_at=paid_at,
-        raw_payload_json={
-            "gateway": provider,
-            "gateway_fee": str(quote.gateway_fee),
-            "apply_tax": apply_tax,
-            "tax_mode": tax_mode,
-            "tax_value": str(Decimal(tax_value)),
-            "tax_amount": str(quote.tax_amount),
-            "base_amount": str(quote.base_amount),
-            "total_amount": str(quote.total_amount),
-            "metadata": metadata,
-            "simulate_failure": simulate_failure,
-        },
-    )
-
-    db.add(payment)
-
-    if payment_status == "paid":
-        order.tax_total = quote.tax_amount
-        order.grand_total = quote.total_amount
-        order.payment_status = order_payment_status
-        if order.status in {"placed", "pending"}:
-            order.status = "processing"
-    elif provider == "cod":
-        order.tax_total = quote.tax_amount
-        order.grand_total = quote.total_amount
-        order.payment_status = order_payment_status
-        if order.status in {"placed", "pending"}:
-            order.status = "confirmed"
-    else:
-        order.payment_status = "unpaid"
-
-    db.add(order)
-    db.flush()
-    db.refresh(payment)
-    db.refresh(order)
-
-    return payment, order, quote

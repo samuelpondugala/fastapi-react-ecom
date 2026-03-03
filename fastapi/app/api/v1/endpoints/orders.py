@@ -103,7 +103,7 @@ def list_my_orders(
     "/payment-gateways/free",
     response_model=list[PaymentGatewayRead],
     summary="List payment gateway options",
-    description="Returns payment options including UPI, card, EMI, pay later, and COD.",
+    description="Returns currently enabled payment providers.",
 )
 def list_free_gateways() -> list[PaymentGatewayRead]:
     return [PaymentGatewayRead(**gateway) for gateway in FREE_PAYMENT_GATEWAYS]
@@ -234,10 +234,10 @@ async def razorpay_webhook(
 @router.post(
     "/{order_id}/pay",
     response_model=OrderPaymentResult,
-    summary="Pay order with free gateway",
+    summary="Legacy direct payment endpoint",
     description=(
-        "Processes payment for the order using a free gateway option. "
-        "Tax is charged only here (when payment is attempted), not at checkout."
+        "Direct payment is disabled for real gateways. "
+        "Use Razorpay create-order and verify endpoints instead."
     ),
 )
 def pay_order(
@@ -258,7 +258,6 @@ def pay_order(
         apply_tax=payment_payload.apply_tax,
         tax_mode=payment_payload.tax_mode,
         tax_value=payment_payload.tax_value,
-        simulate_failure=payment_payload.simulate_failure,
         metadata=payment_payload.metadata,
     )
     db.commit()

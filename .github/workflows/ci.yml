@@ -4,6 +4,7 @@ on:
   push:
     branches:
       - main
+      - bhuavana
   pull_request:
 
 jobs:

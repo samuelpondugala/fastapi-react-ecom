@@ -24,18 +24,13 @@ function loadStoredUser() {
 export function AuthProvider({ children }) {
   const [token, setToken] = useState(loadStoredToken());
   const [user, setUser] = useState(loadStoredUser());
-  const [loading, setLoading] = useState(Boolean(loadStoredToken()));
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!token) {
-      setLoading(false);
-      return;
-    }
-
     let cancelled = false;
     async function hydrateUser() {
       try {
-        const me = await api.auth.me(token);
+        const me = await api.auth.me(token, { suppressErrorToast: true });
         if (cancelled) return;
         setUser(me);
         localStorage.setItem(USER_KEY, JSON.stringify(me));
@@ -61,7 +56,7 @@ export function AuthProvider({ children }) {
       token,
       user,
       loading,
-      isAuthenticated: Boolean(token),
+      isAuthenticated: Boolean(token || user),
       isAdmin: user?.role === 'admin',
       isVendor: user?.role === 'vendor',
       async login(identifier, password) {
@@ -84,13 +79,17 @@ export function AuthProvider({ children }) {
         return api.auth.register(payload);
       },
       async refreshMe() {
-        if (!token) return null;
         const me = await api.auth.me(token);
         setUser(me);
         localStorage.setItem(USER_KEY, JSON.stringify(me));
         return me;
       },
-      logout() {
+      async logout() {
+        try {
+          await api.auth.logout();
+        } catch {
+          // no-op: local cleanup still proceeds
+        }
         setToken(null);
         setUser(null);
         localStorage.removeItem(TOKEN_KEY);

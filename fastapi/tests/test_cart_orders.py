@@ -117,7 +117,7 @@ def test_free_gateway_list_endpoint(client: TestClient, customer_auth_headers: d
     response = client.get("/api/v1/orders/payment-gateways/free", headers=customer_auth_headers)
     assert response.status_code == 200
     codes = {gateway["code"] for gateway in response.json()}
-    assert {"manual_free", "mock_free"}.issubset(codes)
+    assert {"razorpay_upi", "razorpay_card"} == codes
 
 
 def test_tax_is_not_applied_at_checkout_but_at_payment(
@@ -133,22 +133,18 @@ def test_tax_is_not_applied_at_checkout_but_at_payment(
     quote_response = client.post(
         f"/api/v1/orders/{order['id']}/payment/quote",
         headers=customer_auth_headers,
-        json={"provider": "manual_free", "apply_tax": True, "tax_mode": "percent", "tax_value": "10.00"},
+        json={"provider": "razorpay_upi", "apply_tax": True, "tax_mode": "percent", "tax_value": "10.00"},
     )
     assert quote_response.status_code == 200
 
     pay_response = client.post(
         f"/api/v1/orders/{order['id']}/pay",
         headers=customer_auth_headers,
-        json={"provider": "manual_free", "apply_tax": True, "tax_mode": "percent", "tax_value": "10.00"},
+        json={"provider": "razorpay_upi", "apply_tax": True, "tax_mode": "percent", "tax_value": "10.00"},
     )
-    assert pay_response.status_code == 200
-
-    body = pay_response.json()
-    assert body["payment"]["status"] == "paid"
-    assert body["order"]["payment_status"] == "paid"
-    assert body["quote"]["tax_amount"] != "0.00"
-    assert body["order"]["tax_total"] == body["quote"]["tax_amount"]
+    assert pay_response.status_code == 400
+    assert "Direct /pay is disabled" in pay_response.json()["detail"]
+    assert quote_response.json()["tax_amount"] != "0.00"
 
 
 def test_user_cannot_pay_other_users_order(
@@ -164,7 +160,7 @@ def test_user_cannot_pay_other_users_order(
     assert response.status_code == 403
 
 
-def test_admin_can_pay_any_order(
+def test_admin_cannot_use_legacy_pay_endpoint(
     client: TestClient,
     customer_auth_headers: dict[str, str],
     admin_auth_headers: dict[str, str],
@@ -174,50 +170,54 @@ def test_admin_can_pay_any_order(
     pay_response = client.post(
         f"/api/v1/orders/{order['id']}/pay",
         headers=admin_auth_headers,
-        json={"provider": "manual_free", "apply_tax": True, "tax_mode": "fixed", "tax_value": "3.50"},
+        json={"provider": "razorpay_card", "apply_tax": True, "tax_mode": "fixed", "tax_value": "3.50"},
     )
 
-    assert pay_response.status_code == 200
-    assert pay_response.json()["order"]["payment_status"] == "paid"
-    assert pay_response.json()["order"]["status"] == "processing"
+    assert pay_response.status_code == 400
+    assert "Direct /pay is disabled" in pay_response.json()["detail"]
 
 
-def test_mock_gateway_failure_does_not_mark_order_paid(
+def test_quote_rejects_non_razorpay_provider(
     client: TestClient,
     customer_auth_headers: dict[str, str],
     admin_auth_headers: dict[str, str],
 ) -> None:
     order = _create_order(client, customer_auth_headers, admin_auth_headers)
 
-    pay_response = client.post(
-        f"/api/v1/orders/{order['id']}/pay",
+    quote_response = client.post(
+        f"/api/v1/orders/{order['id']}/payment/quote",
         headers=customer_auth_headers,
         json={
-            "provider": "mock_free",
+            "provider": "manual_free",
             "apply_tax": True,
             "tax_mode": "percent",
             "tax_value": "8.00",
-            "simulate_failure": True,
         },
     )
 
-    assert pay_response.status_code == 200
-    assert pay_response.json()["payment"]["status"] == "failed"
-    assert pay_response.json()["order"]["payment_status"] == "unpaid"
+    assert quote_response.status_code == 422
 
 
-def test_cannot_pay_order_twice(
+def test_legacy_pay_endpoint_is_consistently_disabled(
     client: TestClient,
     customer_auth_headers: dict[str, str],
     admin_auth_headers: dict[str, str],
 ) -> None:
     order = _create_order(client, customer_auth_headers, admin_auth_headers)
 
-    first = client.post(f"/api/v1/orders/{order['id']}/pay", headers=customer_auth_headers)
-    assert first.status_code == 200
+    first = client.post(
+        f"/api/v1/orders/{order['id']}/pay",
+        headers=customer_auth_headers,
+        json={"provider": "razorpay_upi"},
+    )
+    assert first.status_code == 400
 
-    second = client.post(f"/api/v1/orders/{order['id']}/pay", headers=customer_auth_headers)
-    assert second.status_code == 409
+    second = client.post(
+        f"/api/v1/orders/{order['id']}/pay",
+        headers=customer_auth_headers,
+        json={"provider": "razorpay_upi"},
+    )
+    assert second.status_code == 400
 
 
 def test_cart_is_usable_after_checkout_conversion(

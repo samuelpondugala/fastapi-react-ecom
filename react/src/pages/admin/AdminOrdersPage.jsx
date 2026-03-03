@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { Link } from 'react-router-dom';
 
 import StatusPill from '../../components/StatusPill';
 import { useAuth } from '../../context/AuthContext';
@@ -11,11 +12,9 @@ export default function AdminOrdersPage() {
   const [orderId, setOrderId] = useState('');
   const [order, setOrder] = useState(null);
   const [error, setError] = useState('');
-  const [result, setResult] = useState(null);
 
   async function lookupOrder() {
     setError('');
-    setResult(null);
 
     if (!orderId) {
       setError('Enter an order ID first.');
@@ -31,29 +30,11 @@ export default function AdminOrdersPage() {
     }
   }
 
-  async function payOrder() {
-    if (!order) return;
-
-    try {
-      const paymentResult = await api.orders.payOrder(token, order.id, {
-        provider: 'manual_free',
-        apply_tax: true,
-        tax_mode: 'percent',
-        tax_value: '12.00',
-      });
-      setResult(paymentResult);
-      setOrder(paymentResult.order);
-      setError('');
-    } catch (err) {
-      setError(err.message || 'Could not process payment.');
-    }
-  }
-
   return (
     <section className="stack-gap">
       <div className="section__head">
         <h1>Order Center</h1>
-        <p className="muted">Lookup any order by ID and process payment using free gateway.</p>
+        <p className="muted">Lookup any order by ID and open Razorpay payment screen.</p>
       </div>
 
       {error && <div className="alert alert--error">{error}</div>}
@@ -84,19 +65,9 @@ export default function AdminOrdersPage() {
             Grand total: <strong>{formatMoney(order.grand_total)}</strong>
           </p>
 
-          <button className="btn" type="button" onClick={payOrder}>
-            Pay with manual_free (12% tax)
-          </button>
-        </div>
-      )}
-
-      {result && (
-        <div className="card card--inset">
-          <h4>Payment Result</h4>
-          <p>
-            Status: <StatusPill value={result.payment.status} />
-          </p>
-          <p className="small muted">Reference: {result.payment.transaction_ref}</p>
+          <Link className="btn" to={`/orders/${order.id}?provider=razorpay_upi`}>
+            Open payment page
+          </Link>
         </div>
       )}
     </section>

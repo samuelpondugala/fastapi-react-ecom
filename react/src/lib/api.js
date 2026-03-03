@@ -21,7 +21,7 @@ function buildQuery(params = {}) {
   return qs ? `?${qs}` : '';
 }
 
-async function request(path, { method = 'GET', token, body, query, headers = {} } = {}) {
+async function request(path, { method = 'GET', token, body, query, headers = {}, suppressErrorToast = false } = {}) {
   const url = `${API_BASE_URL}${path}${buildQuery(query)}`;
   const finalHeaders = { ...headers };
 
@@ -34,6 +34,7 @@ async function request(path, { method = 'GET', token, body, query, headers = {} 
 
   const response = await fetch(url, {
     method,
+    credentials: 'include',
     headers: finalHeaders,
     body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
   });
@@ -43,7 +44,9 @@ async function request(path, { method = 'GET', token, body, query, headers = {} 
 
   if (!response.ok) {
     const message = typeof data === 'string' ? data || response.statusText : data?.detail || data?.message;
-    errorToast(message || 'Request failed');
+    if (!suppressErrorToast) {
+      errorToast(message || 'Request failed');
+    }
     throw createError(response.status, message, data);
   }
 
@@ -59,7 +62,8 @@ export const api = {
   auth: {
     register: (payload) => request('/auth/register', { method: 'POST', body: payload }),
     login: (payload) => request('/auth/login', { method: 'POST', body: payload }),
-    me: (token) => request('/auth/me', { token }),
+    me: (token, options = {}) => request('/auth/me', { token, ...options }),
+    logout: () => request('/auth/logout', { method: 'POST', suppressErrorToast: true }),
   },
   users: {
     list: (token, query) => request('/users', { token, query }),

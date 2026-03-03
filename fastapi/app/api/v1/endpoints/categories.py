@@ -7,6 +7,7 @@ from app.db.session import get_db
 from app.models.category import Category
 from app.models.user import User
 from app.schemas.category import CategoryCreate, CategoryRead, CategoryUpdate
+from app.services.cache import get_cached, invalidate_namespace, set_cached
 
 router = APIRouter()
 
@@ -17,12 +18,30 @@ def list_categories(
     include_inactive: bool = False,
     limit: int = 100,
     offset: int = 0,
-) -> list[Category]:
+) -> list[CategoryRead]:
+    cached = get_cached(
+        "categories:list",
+        include_inactive=include_inactive,
+        limit=limit,
+        offset=offset,
+    )
+    if isinstance(cached, list):
+        return [CategoryRead.model_validate(item) for item in cached]
+
     statement = select(Category)
     if not include_inactive:
         statement = statement.where(Category.is_active.is_(True))
     statement = statement.order_by(Category.name).offset(offset).limit(limit)
-    return list(db.scalars(statement).all())
+    categories = list(db.scalars(statement).all())
+    payload = [CategoryRead.model_validate(item).model_dump(mode="json") for item in categories]
+    set_cached(
+        "categories:list",
+        payload,
+        include_inactive=include_inactive,
+        limit=limit,
+        offset=offset,
+    )
+    return [CategoryRead.model_validate(item) for item in categories]
 
 
 @router.post("", response_model=CategoryRead, status_code=status.HTTP_201_CREATED)
@@ -39,6 +58,7 @@ def create_category(
     db.add(category)
     db.commit()
     db.refresh(category)
+    invalidate_namespace("categories:list")
     return category
 
 
@@ -65,4 +85,5 @@ def update_category(
     db.add(category)
     db.commit()
     db.refresh(category)
+    invalidate_namespace("categories:list")
     return category

@@ -22,14 +22,14 @@ For both platforms, the production architecture is:
 4. Environment variables for secrets/config
 5. Health checks (`/api/v1/health/ready`)
 6. HTTPS endpoints for frontend and backend domains
-7. Payment modes in flow: UPI, Cards, EMI, Pay Later, COD (plus sandbox providers)
+7. Payment modes in flow: Razorpay UPI and Cards (real gateways only)
 
 Important notes:
 
 - Do not use SQLite in production.
 - Do not keep default secrets in production.
 - Do not open `/docs` publicly unless you intentionally want it accessible.
-- Taxes are applied only when calling `POST /api/v1/orders/{order_id}/pay`.
+- Payment tax quote is available via `POST /api/v1/orders/{order_id}/payment/quote`.
 
 ## Stage 1: Local readiness checklist
 
@@ -98,6 +98,15 @@ RUN_SEED=false
 AUTO_BOOTSTRAP_STAFF=true
 SEED_DEMO_USERS=false
 
+# Redis for sessions/cache
+REDIS_ENABLED=true
+REDIS_URL=redis://default:password@host:6379/0
+SESSION_COOKIE_SECURE=true
+SESSION_COOKIE_SAMESITE=none
+SESSION_COOKIE_DOMAIN=
+SESSION_TTL_SECONDS=604800
+CACHE_TTL_SECONDS=120
+
 # Frontend build env (React)
 VITE_API_BASE_URL=https://api.example.com/api/v1
 
@@ -105,8 +114,6 @@ VITE_API_BASE_URL=https://api.example.com/api/v1
 RAZORPAY_KEY_ID=rzp_live_xxx
 RAZORPAY_KEY_SECRET=xxx
 RAZORPAY_WEBHOOK_SECRET=whsec_xxx
-PAYTM_MERCHANT_ID=xxx
-PAYTM_MERCHANT_KEY=xxx
 ```
 
 Generate secure values:
@@ -539,14 +546,16 @@ aws cloudfront create-invalidation --distribution-id YOUR_DIST_ID --paths "/*"
 4. Cart -> checkout flow works.
 5. Payment gateway options endpoint works: `GET /api/v1/orders/payment-gateways/free`.
 6. Payment quote works: `POST /api/v1/orders/{order_id}/payment/quote`.
-7. Pay endpoint works and applies tax only at payment time: `POST /api/v1/orders/{order_id}/pay`.
-8. DB writes persist after restart.
-9. Frontend can call backend from production domain.
-10. CORS errors are not present.
-11. TLS certificate valid.
-12. React SPA route refresh works (`/catalog`, `/orders/1`, `/admin/users`).
-13. Admin-only pages are blocked for non-admin users.
-14. Payment quote and pay responses are reflected in UI.
+7. Razorpay create-order endpoint works: `POST /api/v1/orders/{order_id}/payment/razorpay/order`.
+8. Razorpay verify endpoint works: `POST /api/v1/orders/{order_id}/payment/razorpay/verify`.
+9. Razorpay webhook is accepted with valid signature.
+10. DB writes persist after restart.
+11. Frontend can call backend from production domain.
+12. CORS errors are not present.
+13. TLS certificate valid.
+14. React SPA route refresh works (`/catalog`, `/orders/1`, `/admin/users`).
+15. Admin-only pages are blocked for non-admin users.
+16. Payment quote and verify responses are reflected in UI.
 
 ## Stage 5: Common failure cases and fixes
 
@@ -579,20 +588,14 @@ Cause: strict CSP applied to docs page.
 
 Fix: already handled in middleware by docs-specific CSP. If custom CSP is changed later, allow Swagger/ReDoc assets.
 
-### Failure: Payment succeeds but tax stays zero
+### Failure: Payment quote shows tax but final order stays unpaid
 
-Cause: `apply_tax` is false (default) in pay payload.
+Cause: Razorpay verify/webhook step was not completed after checkout popup.
 
-Fix: send tax options when calling pay endpoint, for example:
-
-```json
-{
-  "provider": "manual_free",
-  "apply_tax": true,
-  "tax_mode": "percent",
-  "tax_value": "18.00"
-}
-```
+Fix:
+1. Ensure frontend calls `/payment/razorpay/verify` after checkout success callback.
+2. Ensure webhook secret matches dashboard secret.
+3. Ensure webhook endpoint is reachable publicly.
 
 ### Failure: `CORS` blocked in browser
 
@@ -683,28 +686,32 @@ AWS:
 - https://docs.aws.amazon.com/amplify/latest/userguide/welcome.html
 - https://docs.aws.amazon.com/AmazonCloudFront/latest/DeveloperGuide/Introduction.html
 
-## Stage R10: Real payment gateway wiring checklist (Razorpay / Paytm)
+## Stage R10: Real payment gateway wiring checklist (Razorpay)
 
-1. Create production merchant accounts with Razorpay and/or Paytm.
-2. Generate live API credentials from each dashboard.
+1. Create production merchant account in Razorpay.
+2. Generate live API credentials from Razorpay dashboard.
 3. Set credentials as environment variables in backend service:
    - `RAZORPAY_KEY_ID`
    - `RAZORPAY_KEY_SECRET`
    - `RAZORPAY_WEBHOOK_SECRET`
-   - `PAYTM_MERCHANT_ID`
-   - `PAYTM_MERCHANT_KEY`
-4. Keep sandbox providers enabled in lower environments for QA (`manual_free`, `mock_free`).
-5. Validate critical flows in staging:
+4. Validate critical flows in staging:
    - UPI success/failure
    - Card success/failure
-   - COD placement
    - refund/cancel webhooks (if enabled in your gateway setup)
 
 Razorpay webhook URL to configure in dashboard:
 
 - `https://<your-backend-domain>/api/v1/orders/payment/razorpay/webhook`
 
-Current codebase exposes gateway choices and payment-mode UX. You should connect provider SDK/API calls in backend payment service before accepting live transactions.
+Razorpay console links:
+
+- API keys: `https://dashboard.razorpay.com/app/keys`
+- Webhooks: `https://dashboard.razorpay.com/app/webhooks`
+- API docs: `https://razorpay.com/docs/api/`
+- API key guide: `https://razorpay.com/docs/payments/dashboard/account-settings/api-keys/`
+- Webhook guide: `https://razorpay.com/docs/webhooks`
+
+Current codebase already calls Razorpay APIs from backend and verifies payment signatures before marking orders as paid.
 
 ## Stage R11: Can I deploy on GitHub Pages?
 

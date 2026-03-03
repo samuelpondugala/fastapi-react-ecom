@@ -19,6 +19,22 @@ class Settings(BaseSettings):
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_RECYCLE_SECONDS: int = 1800
 
+    REDIS_ENABLED: bool = False
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_CONNECT_TIMEOUT_SECONDS: float = 2.0
+    REDIS_SOCKET_TIMEOUT_SECONDS: float = 2.0
+
+    SESSION_COOKIE_NAME: str = "ecom_sid"
+    SESSION_COOKIE_MAX_AGE_SECONDS: int = 60 * 60 * 24 * 7
+    SESSION_COOKIE_SECURE: bool = False
+    SESSION_COOKIE_SAMESITE: str = "lax"
+    SESSION_COOKIE_DOMAIN: str | None = None
+    SESSION_REDIS_PREFIX: str = "session:"
+    SESSION_TTL_SECONDS: int = 60 * 60 * 24 * 7
+
+    CACHE_REDIS_PREFIX: str = "cache:"
+    CACHE_TTL_SECONDS: int = 120
+
     APP_CURRENCY: str = "INR"
     USD_TO_INR_RATE: float = 83.0
     FREE_DELIVERY_THRESHOLD: float = 1000.0
@@ -54,8 +70,6 @@ class Settings(BaseSettings):
     RAZORPAY_KEY_ID: str | None = None
     RAZORPAY_KEY_SECRET: str | None = None
     RAZORPAY_WEBHOOK_SECRET: str | None = None
-    PAYTM_MERCHANT_ID: str | None = None
-    PAYTM_MERCHANT_KEY: str | None = None
 
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
@@ -98,6 +112,14 @@ class Settings(BaseSettings):
             normalized_item = normalize_host(item)
             if normalized_item and normalized_item not in normalized:
                 normalized.append(normalized_item)
+        return normalized
+
+    @field_validator("SESSION_COOKIE_SAMESITE", mode="before")
+    @classmethod
+    def normalize_cookie_samesite(cls, value: str) -> str:
+        normalized = (value or "lax").strip().lower()
+        if normalized not in {"lax", "strict", "none"}:
+            raise ValueError("SESSION_COOKIE_SAMESITE must be one of: lax, strict, none")
         return normalized
 
     @model_validator(mode="after")
