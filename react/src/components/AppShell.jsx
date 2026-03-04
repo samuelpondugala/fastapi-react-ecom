@@ -57,8 +57,8 @@ export default function AppShell() {
       <header className="topbar">
         <div className="wrap topbar__inner">
           <NavLink to="/" className="brand">
-            <span className="brand__kicker">Mirafra</span>
-            <span className="brand__title">Commerce Studio</span>
+            <span className="brand__kicker">DigiKart</span>
+            <span className="brand__title">Modern Commerce Studio</span>
           </NavLink>
 
           <nav className="navlinks" aria-label="Main navigation">
