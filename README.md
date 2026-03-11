@@ -23,6 +23,7 @@ Production-oriented e-commerce application with customer storefront, vendor prod
 - [Overview](#overview)
 - [Core Features](#core-features)
 - [Architecture](#architecture)
+- [Folder Structure](#folder-structure)
 - [Tech Stack](#tech-stack)
 - [Repository Structure](#repository-structure)
 - [Getting Started](#getting-started)
@@ -95,6 +96,150 @@ Main data artifacts:
 - Sample import payloads:
   - [`dummyjson_products_sample.json`](./dummyjson_products_sample.json)
   - [`fastapi/sample_dummyjson_products.json`](./fastapi/sample_dummyjson_products.json)
+
+---
+### Folder Structure
+
+```
+ecom/
+│
+├── README.md
+├── DEPLOYMENT_GUIDE_RENDER_AWS.md
+├── schema.drawio
+├── dummyjson_products_sample.json
+├── presentation.md
+│
+├── fastapi/                         # Backend API
+│   │
+│   ├── manage.py
+│   ├── Dockerfile
+│   ├── alembic.ini
+│   ├── requirements.txt
+│   ├── requirements-dev.txt
+│   ├── sample_dummyjson_products.json
+│   ├── README.md
+│   │
+│   ├── alembic/
+│   │   └── versions/
+│   │
+│   ├── tests/                       # Backend test suite
+│   │
+│   └── app/                         # Application Package
+│       │
+│       ├── main.py                  # FastAPI entry point
+│       │
+│       ├── api/
+│       │   ├── deps.py
+│       │   ├── router.py
+│       │   └── v1/
+│       │       └── endpoints/
+│       │           ├── auth.py
+│       │           ├── users.py
+│       │           ├── addresses.py
+│       │           ├── products.py
+│       │           ├── categories.py
+│       │           ├── reviews.py
+│       │           ├── cart.py
+│       │           ├── orders.py
+│       │           ├── coupons.py
+│       │           └── health.py
+│       │
+│       ├── core/
+│       │   ├── config.py
+│       │   ├── security.py
+│       │   └── middleware.py
+│       │
+│       ├── db/
+│       │   ├── base.py
+│       │   ├── session.py
+│       │   └── init_db.py
+│       │
+│       ├── models/
+│       │   ├── user.py
+│       │   ├── address.py
+│       │   ├── category.py
+│       │   ├── product.py
+│       │   ├── inventory.py
+│       │   ├── cart.py
+│       │   ├── order.py
+│       │   └── review.py
+│       │
+│       ├── schemas/
+│       │   ├── auth.py
+│       │   ├── user.py
+│       │   ├── address.py
+│       │   ├── product.py
+│       │   ├── category.py
+│       │   ├── cart.py
+│       │   ├── order.py
+│       │   ├── payment.py
+│       │   ├── coupon.py
+│       │   ├── review.py
+│       │   ├── importer.py
+│       │   └── common.py
+│       │
+│       └── services/
+│           ├── cart.py
+│           ├── order.py
+│           ├── payment.py
+│           └── product_import.py
+│
+└── react/                           # Frontend SPA
+    │
+    ├── package.json
+    ├── package-lock.json
+    ├── vite.config.js
+    ├── index.html
+    └── README.md
+    │
+    └── src/
+        │
+        ├── main.jsx
+        ├── App.jsx
+        ├── styles.css
+        │
+        ├── components/
+        │   ├── AppShell.jsx
+        │   ├── AdminShell.jsx
+        │   ├── ProtectedRoute.jsx
+        │   ├── ProductCard.jsx
+        │   └── StatusPill.jsx
+        │
+        ├── context/
+        │   └── AuthContext.jsx
+        │
+        ├── lib/
+        │   ├── api.js
+        │   └── format.js
+        │
+        └── pages/
+            │
+            ├── HomePage.jsx
+            ├── CatalogPage.jsx
+            ├── ProductPage.jsx
+            ├── CartPage.jsx
+            ├── CheckoutPage.jsx
+            ├── OrdersPage.jsx
+            ├── OrderDetailPage.jsx
+            ├── ProfilePage.jsx
+            ├── LoginPage.jsx
+            ├── RegisterPage.jsx
+            ├── NotFoundPage.jsx
+            │
+            ├── admin/
+            │   ├── AdminDashboardPage.jsx
+            │   ├── AdminUsersPage.jsx
+            │   ├── AdminProductsPage.jsx
+            │   ├── AdminOrdersPage.jsx
+            │   ├── AdminCategoriesPage.jsx
+            │   └── AdminCouponsPage.jsx
+            │
+            └── vendor/
+                └── VendorProductsPage.jsx
+```
+
+
+
 
 ---
 
