@@ -1,0 +1,195 @@
+<mxfile host="app.diagrams.net" modified="2026-03-11T00:00:00.000Z" agent="Codex" version="22.1.16" type="device">
+  <diagram id="folder-structure" name="Folder Structure">
+    <mxGraphModel dx="1800" dy="1000" grid="1" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="1" pageScale="1" pageWidth="2600" pageHeight="1700" math="0" shadow="0">
+      <root>
+        <mxCell id="0"/>
+        <mxCell id="1" parent="0"/>
+
+        <mxCell id="repo_root" value="&lt;b&gt;ecom/&lt;/b&gt;&lt;br&gt;Repository Root" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#0F172A;fillColor=#E0F2FE;fontSize=16;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1020" y="20" width="420" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="root_files" value="&lt;b&gt;Root Files&lt;/b&gt;&lt;br&gt;README.md&lt;br&gt;DEPLOYMENT_GUIDE_RENDER_AWS.md&lt;br&gt;schema.drawio&lt;br&gt;dummyjson_products_sample.json&lt;br&gt;presentation.md" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#374151;fillColor=#F3F4F6;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="40" y="150" width="420" height="250" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="fastapi_root" value="&lt;b&gt;fastapi/&lt;/b&gt;&lt;br&gt;Backend API" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#065F46;fillColor=#DCFCE7;fontSize=14;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="760" y="140" width="400" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="fastapi_files" value="&lt;b&gt;Key Files&lt;/b&gt;&lt;br&gt;manage.py&lt;br&gt;Dockerfile&lt;br&gt;alembic.ini&lt;br&gt;requirements.txt&lt;br&gt;requirements-dev.txt&lt;br&gt;sample_dummyjson_products.json&lt;br&gt;README.md" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#166534;fillColor=#ECFDF5;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="520" y="280" width="300" height="240" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="fastapi_alembic" value="&lt;b&gt;alembic/&lt;/b&gt;&lt;br&gt;versions/" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#166534;fillColor=#F0FDF4;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="850" y="280" width="260" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="fastapi_tests" value="&lt;b&gt;tests/&lt;/b&gt;&lt;br&gt;backend test suite" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#166534;fillColor=#F0FDF4;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1140" y="280" width="250" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="fastapi_app" value="&lt;b&gt;app/&lt;/b&gt;&lt;br&gt;Application Package" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#166534;fillColor=#BBF7D0;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="760" y="470" width="400" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="app_main" value="&lt;b&gt;main.py&lt;/b&gt;&lt;br&gt;FastAPI app entry" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#15803D;fillColor=#F7FEE7;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="520" y="590" width="250" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="app_api" value="&lt;b&gt;api/&lt;/b&gt;&lt;br&gt;deps.py&lt;br&gt;router.py&lt;br&gt;v1/endpoints/*" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#15803D;fillColor=#F0FDF4;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="800" y="590" width="290" height="140" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="app_core" value="&lt;b&gt;core/&lt;/b&gt;&lt;br&gt;config.py&lt;br&gt;security.py&lt;br&gt;middleware.py" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#15803D;fillColor=#F0FDF4;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="590" width="260" height="130" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="app_db" value="&lt;b&gt;db/&lt;/b&gt;&lt;br&gt;base.py&lt;br&gt;session.py&lt;br&gt;init_db.py" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#15803D;fillColor=#F0FDF4;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="520" y="740" width="250" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="app_models" value="&lt;b&gt;models/&lt;/b&gt;&lt;br&gt;user.py, address.py, category.py&lt;br&gt;product.py, inventory.py, cart.py&lt;br&gt;order.py, review.py" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#15803D;fillColor=#F0FDF4;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="800" y="760" width="290" height="150" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="app_schemas" value="&lt;b&gt;schemas/&lt;/b&gt;&lt;br&gt;auth.py, user.py, address.py&lt;br&gt;product.py, category.py, cart.py&lt;br&gt;order.py, payment.py, coupon.py&lt;br&gt;review.py, importer.py, common.py" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#15803D;fillColor=#F0FDF4;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1120" y="740" width="280" height="170" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="app_services" value="&lt;b&gt;services/&lt;/b&gt;&lt;br&gt;cart.py&lt;br&gt;order.py&lt;br&gt;payment.py&lt;br&gt;product_import.py" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#15803D;fillColor=#F0FDF4;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="800" y="940" width="290" height="130" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="api_endpoints" value="&lt;b&gt;v1/endpoints/&lt;/b&gt;&lt;br&gt;auth.py, users.py, addresses.py&lt;br&gt;products.py, categories.py, reviews.py&lt;br&gt;cart.py, orders.py, coupons.py, health.py" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#15803D;fillColor=#DCFCE7;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="800" y="1110" width="430" height="150" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_root" value="&lt;b&gt;react/&lt;/b&gt;&lt;br&gt;Frontend SPA" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#92400E;fillColor=#FEF3C7;fontSize=14;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1440" y="140" width="400" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_files" value="&lt;b&gt;Key Files&lt;/b&gt;&lt;br&gt;package.json&lt;br&gt;package-lock.json&lt;br&gt;vite.config.js&lt;br&gt;index.html&lt;br&gt;README.md" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#B45309;fillColor=#FFFBEB;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1430" y="280" width="310" height="180" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_src" value="&lt;b&gt;src/&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#B45309;fillColor=#FDE68A;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1810" y="280" width="290" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_boot" value="&lt;b&gt;App Boot&lt;/b&gt;&lt;br&gt;main.jsx&lt;br&gt;App.jsx&lt;br&gt;styles.css" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#B45309;fillColor=#FFFBEB;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1430" y="510" width="310" height="120" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_components" value="&lt;b&gt;components/&lt;/b&gt;&lt;br&gt;AppShell.jsx, AdminShell.jsx&lt;br&gt;ProtectedRoute.jsx&lt;br&gt;ProductCard.jsx, StatusPill.jsx" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#B45309;fillColor=#FFFBEB;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1810" y="470" width="290" height="150" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_context" value="&lt;b&gt;context/&lt;/b&gt;&lt;br&gt;AuthContext.jsx" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#B45309;fillColor=#FFFBEB;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="2130" y="470" width="250" height="100" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_lib" value="&lt;b&gt;lib/&lt;/b&gt;&lt;br&gt;api.js&lt;br&gt;format.js" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#B45309;fillColor=#FFFBEB;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="2130" y="600" width="250" height="100" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_pages" value="&lt;b&gt;pages/&lt;/b&gt;" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#B45309;fillColor=#FDE68A;fontSize=13;fontStyle=1;align=center;verticalAlign=middle;" vertex="1" parent="1">
+          <mxGeometry x="1810" y="670" width="290" height="70" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_store_pages" value="&lt;b&gt;Storefront Pages&lt;/b&gt;&lt;br&gt;HomePage.jsx, CatalogPage.jsx&lt;br&gt;ProductPage.jsx, CartPage.jsx&lt;br&gt;CheckoutPage.jsx, OrdersPage.jsx&lt;br&gt;OrderDetailPage.jsx, ProfilePage.jsx&lt;br&gt;LoginPage.jsx, RegisterPage.jsx, NotFoundPage.jsx" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#B45309;fillColor=#FFFBEB;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1430" y="790" width="420" height="220" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_admin_pages" value="&lt;b&gt;pages/admin/&lt;/b&gt;&lt;br&gt;AdminDashboardPage.jsx&lt;br&gt;AdminUsersPage.jsx&lt;br&gt;AdminProductsPage.jsx&lt;br&gt;AdminOrdersPage.jsx&lt;br&gt;AdminCategoriesPage.jsx&lt;br&gt;AdminCouponsPage.jsx" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#B45309;fillColor=#FEF3C7;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="1880" y="790" width="290" height="200" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="react_vendor_pages" value="&lt;b&gt;pages/vendor/&lt;/b&gt;&lt;br&gt;VendorProductsPage.jsx" style="rounded=1;whiteSpace=wrap;html=1;strokeColor=#B45309;fillColor=#FEF3C7;fontSize=12;align=left;verticalAlign=top;spacingLeft=8;spacingTop=6;" vertex="1" parent="1">
+          <mxGeometry x="2200" y="790" width="220" height="110" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e1" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#334155;" edge="1" parent="1" source="repo_root" target="root_files">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e2" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#166534;" edge="1" parent="1" source="repo_root" target="fastapi_root">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#B45309;" edge="1" parent="1" source="repo_root" target="react_root">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#166534;" edge="1" parent="1" source="fastapi_root" target="fastapi_files">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#166534;" edge="1" parent="1" source="fastapi_root" target="fastapi_alembic">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e6" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#166534;" edge="1" parent="1" source="fastapi_root" target="fastapi_tests">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#166534;" edge="1" parent="1" source="fastapi_root" target="fastapi_app">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e8" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#15803D;" edge="1" parent="1" source="fastapi_app" target="app_main">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#15803D;" edge="1" parent="1" source="fastapi_app" target="app_api">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#15803D;" edge="1" parent="1" source="fastapi_app" target="app_core">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#15803D;" edge="1" parent="1" source="fastapi_app" target="app_db">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e12" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#15803D;" edge="1" parent="1" source="fastapi_app" target="app_models">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#15803D;" edge="1" parent="1" source="fastapi_app" target="app_schemas">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e14" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#15803D;" edge="1" parent="1" source="fastapi_app" target="app_services">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e15" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#15803D;" edge="1" parent="1" source="app_api" target="api_endpoints">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e16" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#B45309;" edge="1" parent="1" source="react_root" target="react_files">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e17" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#B45309;" edge="1" parent="1" source="react_root" target="react_src">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#B45309;" edge="1" parent="1" source="react_src" target="react_boot">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#B45309;" edge="1" parent="1" source="react_src" target="react_components">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#B45309;" edge="1" parent="1" source="react_src" target="react_context">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#B45309;" edge="1" parent="1" source="react_src" target="react_lib">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#B45309;" edge="1" parent="1" source="react_src" target="react_pages">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+
+        <mxCell id="e23" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#B45309;" edge="1" parent="1" source="react_pages" target="react_store_pages">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#B45309;" edge="1" parent="1" source="react_pages" target="react_admin_pages">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+        <mxCell id="e25" style="edgeStyle=orthogonalEdgeStyle;rounded=0;html=1;endArrow=block;endFill=1;strokeColor=#B45309;" edge="1" parent="1" source="react_pages" target="react_vendor_pages">
+          <mxGeometry relative="1" as="geometry"/>
+        </mxCell>
+      </root>
+    </mxGraphModel>
+  </diagram>
+</mxfile>
