@@ -89,7 +89,7 @@ class Payment(Base):
     provider: Mapped[str] = mapped_column(String(64), nullable=False)
     transaction_ref: Mapped[str] = mapped_column(String(255), nullable=False, unique=True, index=True)
     amount: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
-    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="USD")
+    currency: Mapped[str] = mapped_column(String(3), nullable=False, default="INR")
     status: Mapped[str] = mapped_column(String(32), nullable=False, default="pending")
     paid_at: Mapped[datetime | None] = mapped_column(DateTime(timezone=True), nullable=True)
     raw_payload_json: Mapped[dict | None] = mapped_column(JSON, nullable=True)

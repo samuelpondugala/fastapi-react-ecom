@@ -53,7 +53,7 @@ class ProductVariant(Base):
     attributes_json: Mapped[dict] = mapped_column(JSON, nullable=False, default=dict)
     price: Mapped[Decimal] = mapped_column(Numeric(12, 2), nullable=False)
     compare_at_price: Mapped[Decimal | None] = mapped_column(Numeric(12, 2), nullable=True)
-    currency: Mapped[str] = mapped_column(String(3), default="USD", nullable=False)
+    currency: Mapped[str] = mapped_column(String(3), default="INR", nullable=False)
     weight: Mapped[Decimal | None] = mapped_column(Numeric(10, 3), nullable=True)
     is_active: Mapped[bool] = mapped_column(Boolean, default=True, nullable=False)
     created_at: Mapped[datetime] = mapped_column(DateTime(timezone=True), server_default=func.now(), nullable=False)

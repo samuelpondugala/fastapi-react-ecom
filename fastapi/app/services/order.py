@@ -1,4 +1,5 @@
 import uuid
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from fastapi import HTTPException, status
@@ -8,8 +9,11 @@ from sqlalchemy.orm import Session, selectinload
 from app.models.address import Address
 from app.models.cart import Cart, CartItem
 from app.models.inventory import InventoryMovement
-from app.models.order import Order, OrderItem
+from app.models.order import Coupon, Order, OrderCoupon, OrderItem
 from app.models.product import ProductVariant
+
+FREE_DELIVERY_THRESHOLD = Decimal("1000.00")
+DELIVERY_CHARGE = Decimal("100.00")
 
 
 def _money(value: Decimal) -> Decimal:
@@ -21,6 +25,54 @@ def _next_order_number() -> str:
     return f"ORD-{suffix}"
 
 
+def _calculate_shipping(subtotal: Decimal) -> Decimal:
+    if subtotal >= FREE_DELIVERY_THRESHOLD:
+        return Decimal("0.00")
+    return DELIVERY_CHARGE
+
+
+def _calculate_coupon_discount(subtotal: Decimal, coupon: Coupon | None) -> Decimal:
+    if not coupon:
+        return Decimal("0.00")
+
+    if coupon.type == "fixed":
+        return _money(min(Decimal(coupon.value), subtotal))
+    if coupon.type == "percent":
+        return _money(subtotal * (Decimal(coupon.value) / Decimal("100.00")))
+    return Decimal("0.00")
+
+
+def _get_valid_coupon(db: Session, coupon_code: str | None, subtotal: Decimal) -> Coupon | None:
+    if not coupon_code:
+        return None
+
+    normalized = coupon_code.strip().upper()
+    coupon = db.scalar(select(Coupon).where(Coupon.code.ilike(normalized), Coupon.is_active.is_(True)))
+    if not coupon:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Coupon not found or inactive")
+
+    now = datetime.now(timezone.utc)
+    starts_at = coupon.starts_at
+    expires_at = coupon.expires_at
+    if starts_at and starts_at.tzinfo is None:
+        starts_at = starts_at.replace(tzinfo=timezone.utc)
+    if expires_at and expires_at.tzinfo is None:
+        expires_at = expires_at.replace(tzinfo=timezone.utc)
+
+    if starts_at and starts_at > now:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Coupon is not active yet")
+    if expires_at and expires_at < now:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Coupon has expired")
+
+    if coupon.min_order_amount is not None and subtotal < Decimal(coupon.min_order_amount):
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Coupon requires minimum order amount of {coupon.min_order_amount}",
+        )
+
+    return coupon
+
+
 def create_order_from_active_cart(
     db: Session,
     user_id: int,
@@ -28,6 +80,7 @@ def create_order_from_active_cart(
     billing_address_id: int | None,
     shipping_total: Decimal,
     tax_total: Decimal,
+    coupon_code: str | None = None,
 ) -> Order:
     cart = db.scalar(
         select(Cart)
@@ -52,10 +105,11 @@ def create_order_from_active_cart(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Billing address not found")
 
     subtotal = _money(sum((item.unit_price * item.quantity for item in cart.items), start=Decimal("0.00")))
-    discount_total = Decimal("0.00")
+    coupon = _get_valid_coupon(db, coupon_code, subtotal)
+    discount_total = _calculate_coupon_discount(subtotal, coupon)
     # Taxes are applied at payment time. Keep order untaxed at checkout.
     tax_total = Decimal("0.00")
-    shipping_total = _money(Decimal(shipping_total))
+    shipping_total = _money(_calculate_shipping(subtotal))
     grand_total = _money(subtotal - discount_total + tax_total + shipping_total)
 
     order = Order(
@@ -103,6 +157,15 @@ def create_order_from_active_cart(
                 reference_type="order",
                 reference_id=order.id,
                 note=f"Reserved for order {order.order_number}",
+            )
+        )
+
+    if coupon:
+        db.add(
+            OrderCoupon(
+                order_id=order.id,
+                coupon_id=coupon.id,
+                discount_amount=discount_total,
             )
         )
 

@@ -59,3 +59,13 @@ def test_prod_settings_reject_default_admin_password() -> None:
             JWT_SECRET_KEY="real-secret-key",
             DEFAULT_ADMIN_PASSWORD="Admin@1234",
         )
+
+
+def test_allowed_hosts_parser_normalizes_render_style_values() -> None:
+    settings = Settings(ALLOWED_HOSTS="https://my-api.onrender.com/,api.example.com:443, *.example.org")
+    assert settings.ALLOWED_HOSTS == ["my-api.onrender.com", "api.example.com", "*.example.org"]
+
+
+def test_allowed_hosts_parser_deduplicates_and_lowercases() -> None:
+    settings = Settings(ALLOWED_HOSTS="API.EXAMPLE.COM,api.example.com,HTTPS://API.EXAMPLE.COM")
+    assert settings.ALLOWED_HOSTS == ["api.example.com"]

@@ -5,6 +5,7 @@ import re
 from dataclasses import dataclass
 from decimal import Decimal, InvalidOperation
 from typing import Any
+from urllib.error import HTTPError, URLError
 from urllib.parse import urlencode
 from urllib.request import Request, urlopen
 
@@ -13,6 +14,8 @@ from sqlalchemy.orm import Session, selectinload
 
 from app.models.category import Category
 from app.models.product import Product, ProductImage, ProductVariant
+
+USD_TO_INR_RATE = Decimal("83.00")
 
 
 @dataclass
@@ -36,8 +39,20 @@ def fetch_dummyjson_products(*, limit: int, skip: int) -> list[dict[str, Any]]:
     query = urlencode({"limit": limit, "skip": skip})
     url = f"https://dummyjson.com/products?{query}"
     request = Request(url, headers={"User-Agent": "ecom-fastapi-importer/1.0"})
-    with urlopen(request, timeout=20) as response:  # noqa: S310
-        payload = json.loads(response.read().decode("utf-8"))
+    try:
+        with urlopen(request, timeout=20) as response:  # noqa: S310
+            payload = json.loads(response.read().decode("utf-8"))
+    except HTTPError as exc:
+        raw_body = exc.read().decode("utf-8", errors="replace").strip()
+        body_preview = re.sub(r"\s+", " ", raw_body)[:300]
+        details = f"HTTP {exc.code} while calling {url}"
+        if body_preview:
+            details = f"{details}: {body_preview}"
+        raise RuntimeError(details) from exc
+    except URLError as exc:
+        raise RuntimeError(f"Network error while calling {url}: {exc.reason}") from exc
+    except TimeoutError as exc:
+        raise RuntimeError(f"Timeout while calling {url}") from exc
 
     products = payload.get("products", [])
     if not isinstance(products, list):
@@ -130,10 +145,10 @@ def _normalize_product(
     if not sku:
         sku = f"IMP-{_slugify(name).upper()[:30]}-{index:04d}"
 
-    price = _to_decimal(item.get("price"))
-    if price <= Decimal("0.00"):
+    usd_price = _to_decimal(item.get("price"))
+    if usd_price <= Decimal("0.00"):
         raise ValueError("price must be > 0")
-    price = _money(price)
+    price = _money(usd_price * USD_TO_INR_RATE)
 
     discount = _to_decimal(item.get("discountPercentage") or 0)
     compare_at_price = None
@@ -152,6 +167,8 @@ def _normalize_product(
         {
             "source": source,
             "source_id": item.get("id"),
+            "source_price_usd": str(_money(usd_price)),
+            "usd_to_inr_rate": str(USD_TO_INR_RATE),
             "rating": item.get("rating"),
             "stock": item.get("stock"),
             "tags": item.get("tags"),
@@ -173,7 +190,7 @@ def _normalize_product(
         sku=sku,
         price=price,
         compare_at_price=compare_at_price,
-        currency="USD",
+        currency="INR",
         weight=weight,
         images=images,
         attributes=attributes,

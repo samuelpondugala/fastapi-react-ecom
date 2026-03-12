@@ -9,6 +9,7 @@ from app.models.product import Product, ProductImage, ProductVariant
 from app.models.user import User
 from app.schemas.importer import DummyJsonImportRequest, JsonProductImportRequest, ProductImportResult
 from app.schemas.product import ProductCreate, ProductRead, ProductUpdate
+from app.services.cache import get_cached, invalidate_namespace, set_cached
 from app.services.product_import import fetch_dummyjson_products, import_products_from_records
 
 router = APIRouter()
@@ -22,7 +23,18 @@ def list_products(
     q: str | None = None,
     limit: int = 50,
     offset: int = 0,
-) -> list[Product]:
+) -> list[ProductRead]:
+    cached = get_cached(
+        "products:list",
+        category_id=category_id,
+        status_filter=status_filter,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
+    if isinstance(cached, list):
+        return [ProductRead.model_validate(item) for item in cached]
+
     statement = (
         select(Product)
         .options(selectinload(Product.images), selectinload(Product.variants))
@@ -36,11 +48,26 @@ def list_products(
         statement = statement.where(Product.name.ilike(f"%{q}%"))
 
     statement = statement.offset(offset).limit(limit)
-    return list(db.scalars(statement).all())
+    products = list(db.scalars(statement).all())
+    payload = [ProductRead.model_validate(item).model_dump(mode="json") for item in products]
+    set_cached(
+        "products:list",
+        payload,
+        category_id=category_id,
+        status_filter=status_filter,
+        q=q,
+        limit=limit,
+        offset=offset,
+    )
+    return [ProductRead.model_validate(item) for item in products]
 
 
 @router.get("/{product_id}", response_model=ProductRead)
-def get_product(product_id: int, db: Session = Depends(get_db)) -> Product:
+def get_product(product_id: int, db: Session = Depends(get_db)) -> ProductRead:
+    cached = get_cached("products:detail", product_id=product_id)
+    if isinstance(cached, dict):
+        return ProductRead.model_validate(cached)
+
     product = db.scalar(
         select(Product)
         .options(selectinload(Product.images), selectinload(Product.variants))
@@ -48,7 +75,9 @@ def get_product(product_id: int, db: Session = Depends(get_db)) -> Product:
     )
     if not product:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Product not found")
-    return product
+    payload = ProductRead.model_validate(product)
+    set_cached("products:detail", payload.model_dump(mode="json"), product_id=product_id)
+    return payload
 
 
 @router.post("", response_model=ProductRead, status_code=status.HTTP_201_CREATED)
@@ -87,6 +116,8 @@ def create_product(
 
     db.commit()
     db.refresh(product)
+    invalidate_namespace("products:list")
+    invalidate_namespace("products:detail")
     return db.scalar(
         select(Product)
         .options(selectinload(Product.images), selectinload(Product.variants))
@@ -123,6 +154,8 @@ def update_product(
     db.add(product)
     db.commit()
     db.refresh(product)
+    invalidate_namespace("products:list")
+    invalidate_namespace("products:detail")
     return db.scalar(
         select(Product)
         .options(selectinload(Product.images), selectinload(Product.variants))
@@ -159,6 +192,9 @@ def import_dummyjson(
         default_category_name=payload.default_category_name,
     )
     db.commit()
+    invalidate_namespace("products:list")
+    invalidate_namespace("products:detail")
+    invalidate_namespace("categories:list")
     return ProductImportResult(**report)
 
 
@@ -184,4 +220,7 @@ def import_from_json_payload(
         default_category_name=payload.default_category_name,
     )
     db.commit()
+    invalidate_namespace("products:list")
+    invalidate_namespace("products:detail")
+    invalidate_namespace("categories:list")
     return ProductImportResult(**report)

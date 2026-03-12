@@ -8,20 +8,22 @@ from app.models.user import User
 
 def ensure_default_admin(db: Session) -> bool:
     settings = get_settings()
-    existing = db.scalar(select(User).where(User.email == settings.DEFAULT_ADMIN_EMAIL))
-    if existing:
-        return False
+    admin = db.scalar(select(User).where(User.email == settings.DEFAULT_ADMIN_EMAIL))
+    created = False
+    if not admin:
+        admin = User(email=settings.DEFAULT_ADMIN_EMAIL)
+        db.add(admin)
+        created = True
 
-    admin = User(
-        email=settings.DEFAULT_ADMIN_EMAIL,
-        password_hash=get_password_hash(settings.DEFAULT_ADMIN_PASSWORD),
-        role="admin",
-        is_active=True,
-        full_name="Default Admin",
-    )
-    db.add(admin)
+    # Keep default admin aligned with environment values when seed runs.
+    admin.password_hash = get_password_hash(settings.DEFAULT_ADMIN_PASSWORD)
+    admin.role = "admin"
+    admin.is_active = True
+    if not admin.full_name:
+        admin.full_name = "Default Admin"
+
     db.commit()
-    return True
+    return created
 
 
 def ensure_demo_users(db: Session) -> dict[str, bool]:

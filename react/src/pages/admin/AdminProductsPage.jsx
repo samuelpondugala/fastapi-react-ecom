@@ -99,7 +99,7 @@ export default function AdminProductsPage({ vendorMode = false }) {
             attributes_json: { source: 'admin-form' },
             price: form.price,
             compare_at_price: form.compare_at_price || null,
-            currency: 'USD',
+            currency: 'INR',
             weight: form.weight || null,
             is_active: true,
           },
@@ -131,9 +131,21 @@ export default function AdminProductsPage({ vendorMode = false }) {
     setImporting(true);
 
     try {
+      const parsedLimit = Number(importLimit);
+      const parsedSkip = Number(importSkip);
+      if (!Number.isFinite(parsedLimit) || parsedLimit < 1) {
+        throw new Error('DummyJSON limit must be at least 1.');
+      }
+      if (parsedLimit > 500) {
+        throw new Error('DummyJSON limit cannot exceed 500 in a single import.');
+      }
+      if (!Number.isFinite(parsedSkip) || parsedSkip < 0) {
+        throw new Error('DummyJSON skip must be 0 or greater.');
+      }
+
       const result = await api.products.importDummyJson(token, {
-        limit: Number(importLimit),
-        skip: Number(importSkip),
+        limit: Math.trunc(parsedLimit),
+        skip: Math.trunc(parsedSkip),
         update_existing: importUpdateExisting,
         default_category_name: importCategory || 'Imported',
       });
@@ -198,7 +210,7 @@ export default function AdminProductsPage({ vendorMode = false }) {
             <input
               type="number"
               min="1"
-              max="100"
+              max="500"
               value={importLimit}
               onChange={(event) => setImportLimit(event.target.value)}
             />

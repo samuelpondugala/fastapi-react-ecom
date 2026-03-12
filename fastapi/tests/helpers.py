@@ -55,7 +55,7 @@ def create_product(
                     "attributes_json": {"color": "black", "storage": "128GB"},
                     "price": "999.99",
                     "compare_at_price": "1099.99",
-                    "currency": "USD",
+                    "currency": "INR",
                     "weight": "0.200",
                     "is_active": True,
                 }

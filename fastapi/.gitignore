@@ -2,6 +2,7 @@ __pycache__/
 *.pyc
 .venv/
 .env
+.env.example
 ecom.db
 alembic/versions/__pycache__/
 .pytest_cache/

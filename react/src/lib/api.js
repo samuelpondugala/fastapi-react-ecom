@@ -1,3 +1,5 @@
+import { errorToast } from './toast';
+
 const API_BASE_URL =
   import.meta.env.VITE_API_BASE_URL?.replace(/\/$/, '') || 'http://localhost:8000/api/v1';
 
@@ -6,6 +8,40 @@ function createError(status, message, data) {
   error.status = status;
   error.data = data;
   return error;
+}
+
+function formatValidationIssue(issue) {
+  if (issue == null) return '';
+  if (typeof issue === 'string') return issue;
+  if (typeof issue !== 'object') return String(issue);
+
+  const loc = Array.isArray(issue.loc) ? issue.loc.join('.') : '';
+  const msg = typeof issue.msg === 'string' ? issue.msg : '';
+  if (loc && msg) return `${loc}: ${msg}`;
+  if (msg) return msg;
+  if (typeof issue.detail === 'string') return issue.detail;
+
+  try {
+    return JSON.stringify(issue);
+  } catch {
+    return 'Unknown error';
+  }
+}
+
+function normalizeErrorMessage(data, fallback) {
+  if (typeof data === 'string') return data || fallback;
+  if (Array.isArray(data)) {
+    const joined = data.map(formatValidationIssue).filter(Boolean).join('; ');
+    return joined || fallback;
+  }
+  if (data && typeof data === 'object') {
+    if (typeof data.detail === 'string') return data.detail;
+    if (Array.isArray(data.detail)) return normalizeErrorMessage(data.detail, fallback);
+    if (data.detail && typeof data.detail === 'object') return normalizeErrorMessage(data.detail, fallback);
+    if (typeof data.message === 'string') return data.message;
+    return formatValidationIssue(data);
+  }
+  return fallback;
 }
 
 function buildQuery(params = {}) {
@@ -19,7 +55,7 @@ function buildQuery(params = {}) {
   return qs ? `?${qs}` : '';
 }
 
-async function request(path, { method = 'GET', token, body, query, headers = {} } = {}) {
+async function request(path, { method = 'GET', token, body, query, headers = {}, suppressErrorToast = false } = {}) {
   const url = `${API_BASE_URL}${path}${buildQuery(query)}`;
   const finalHeaders = { ...headers };
 
@@ -32,15 +68,20 @@ async function request(path, { method = 'GET', token, body, query, headers = {} 
 
   const response = await fetch(url, {
     method,
+    credentials: 'include',
     headers: finalHeaders,
     body: body === undefined ? undefined : body instanceof FormData ? body : JSON.stringify(body),
   });
 
   const isJson = (response.headers.get('content-type') || '').includes('application/json');
-  const data = isJson ? await response.json() : null;
+  const data = isJson ? await response.json() : await response.text();
 
   if (!response.ok) {
-    throw createError(response.status, data?.detail || data?.message, data);
+    const message = normalizeErrorMessage(data, response.statusText || 'Request failed');
+    if (!suppressErrorToast) {
+      errorToast(message || 'Request failed');
+    }
+    throw createError(response.status, message, data);
   }
 
   return data;
@@ -55,7 +96,8 @@ export const api = {
   auth: {
     register: (payload) => request('/auth/register', { method: 'POST', body: payload }),
     login: (payload) => request('/auth/login', { method: 'POST', body: payload }),
-    me: (token) => request('/auth/me', { token }),
+    me: (token, options = {}) => request('/auth/me', { token, ...options }),
+    logout: () => request('/auth/logout', { method: 'POST', suppressErrorToast: true }),
   },
   users: {
     list: (token, query) => request('/users', { token, query }),
@@ -98,6 +140,10 @@ export const api = {
     quotePayment: (token, id, payload) =>
       request(`/orders/${id}/payment/quote`, { method: 'POST', token, body: payload }),
     payOrder: (token, id, payload) => request(`/orders/${id}/pay`, { method: 'POST', token, body: payload }),
+    createRazorpayOrder: (token, id, payload) =>
+      request(`/orders/${id}/payment/razorpay/order`, { method: 'POST', token, body: payload }),
+    verifyRazorpayPayment: (token, id, payload) =>
+      request(`/orders/${id}/payment/razorpay/verify`, { method: 'POST', token, body: payload }),
   },
   coupons: {
     list: (token, query) => request('/coupons', { token, query }),

@@ -1,5 +1,6 @@
 from functools import lru_cache
 from typing import Annotated
+from urllib.parse import urlsplit
 
 from pydantic import field_validator, model_validator
 from pydantic_settings import BaseSettings, NoDecode, SettingsConfigDict
@@ -17,6 +18,27 @@ class Settings(BaseSettings):
     DB_POOL_SIZE: int = 10
     DB_MAX_OVERFLOW: int = 20
     DB_POOL_RECYCLE_SECONDS: int = 1800
+
+    REDIS_ENABLED: bool = False
+    REDIS_URL: str = "redis://localhost:6379/0"
+    REDIS_CONNECT_TIMEOUT_SECONDS: float = 2.0
+    REDIS_SOCKET_TIMEOUT_SECONDS: float = 2.0
+
+    SESSION_COOKIE_NAME: str = "ecom_sid"
+    SESSION_COOKIE_MAX_AGE_SECONDS: int = 60 * 60 * 24 * 7
+    SESSION_COOKIE_SECURE: bool = False
+    SESSION_COOKIE_SAMESITE: str = "lax"
+    SESSION_COOKIE_DOMAIN: str | None = None
+    SESSION_REDIS_PREFIX: str = "session:"
+    SESSION_TTL_SECONDS: int = 60 * 60 * 24 * 7
+
+    CACHE_REDIS_PREFIX: str = "cache:"
+    CACHE_TTL_SECONDS: int = 120
+
+    APP_CURRENCY: str = "INR"
+    USD_TO_INR_RATE: float = 83.0
+    FREE_DELIVERY_THRESHOLD: float = 1000.0
+    DELIVERY_CHARGE: float = 100.0
 
     CORS_ORIGINS: Annotated[list[str], NoDecode] = [
         "http://localhost:3000",
@@ -45,6 +67,10 @@ class Settings(BaseSettings):
     DEMO_VENDOR_EMAIL: str = "ecomvendor@example.com"
     DEMO_VENDOR_PASSWORD: str = "ecom@123vendor"
 
+    RAZORPAY_KEY_ID: str | None = None
+    RAZORPAY_KEY_SECRET: str | None = None
+    RAZORPAY_WEBHOOK_SECRET: str | None = None
+
     @field_validator("CORS_ORIGINS", mode="before")
     @classmethod
     def parse_cors_origins(cls, value: str | list[str]) -> list[str]:
@@ -55,9 +81,46 @@ class Settings(BaseSettings):
     @field_validator("ALLOWED_HOSTS", mode="before")
     @classmethod
     def parse_allowed_hosts(cls, value: str | list[str]) -> list[str]:
-        if isinstance(value, str):
-            return [host.strip() for host in value.split(",") if host.strip()]
-        return value
+        def normalize_host(raw_host: str) -> str:
+            host = raw_host.strip()
+            if not host:
+                return ""
+            if host == "*":
+                return host
+
+            # Accept URL-like inputs (e.g. https://api.example.com/) and normalize to host only.
+            if "://" in host:
+                parsed = urlsplit(host)
+                host = parsed.netloc or parsed.path
+
+            # Strip any accidental path suffix and credentials.
+            host = host.split("/", 1)[0]
+            if "@" in host:
+                host = host.rsplit("@", 1)[-1]
+
+            # Strip :port for standard hostnames while preserving wildcard host patterns.
+            if host.count(":") == 1 and not host.startswith("*."):
+                maybe_host, maybe_port = host.rsplit(":", 1)
+                if maybe_port.isdigit():
+                    host = maybe_host
+
+            return host.lower().strip()
+
+        hosts = value.split(",") if isinstance(value, str) else value
+        normalized: list[str] = []
+        for item in hosts:
+            normalized_item = normalize_host(item)
+            if normalized_item and normalized_item not in normalized:
+                normalized.append(normalized_item)
+        return normalized
+
+    @field_validator("SESSION_COOKIE_SAMESITE", mode="before")
+    @classmethod
+    def normalize_cookie_samesite(cls, value: str) -> str:
+        normalized = (value or "lax").strip().lower()
+        if normalized not in {"lax", "strict", "none"}:
+            raise ValueError("SESSION_COOKIE_SAMESITE must be one of: lax, strict, none")
+        return normalized
 
     @model_validator(mode="after")
     def validate_production_settings(self) -> "Settings":

@@ -68,3 +68,20 @@ def test_login_with_username_success(client: TestClient, create_user) -> None:
 
     assert response.status_code == 200
     assert "access_token" in response.json()
+
+
+def test_login_with_seeded_display_name_success(client: TestClient, create_user) -> None:
+    create_user(
+        email="staff-account@example.com",
+        password="ecom@123vendor",
+        role="vendor",
+        full_name="ecomvendor",
+    )
+
+    response = client.post(
+        "/api/v1/auth/login",
+        json={"username": "ecomvendor", "password": "ecom@123vendor"},
+    )
+
+    assert response.status_code == 200
+    assert "access_token" in response.json()

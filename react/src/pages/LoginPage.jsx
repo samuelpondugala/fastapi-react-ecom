@@ -62,7 +62,7 @@ export default function LoginPage() {
           {submitting ? 'Signing in...' : 'Sign in'}
         </button>
 
-        <div className="row-gap">
+        {/* <div className="row-gap">
           <button
             type="button"
             className="btn btn--small btn--ghost"
@@ -83,7 +83,7 @@ export default function LoginPage() {
           >
             Use demo vendor
           </button>
-        </div>
+        </div> */}
 
         <p className="muted small">
           New user? <Link to="/register">Create an account</Link>
