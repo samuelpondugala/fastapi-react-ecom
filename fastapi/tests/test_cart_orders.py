@@ -117,7 +117,7 @@ def test_free_gateway_list_endpoint(client: TestClient, customer_auth_headers: d
     response = client.get("/api/v1/orders/payment-gateways/free", headers=customer_auth_headers)
     assert response.status_code == 200
     codes = {gateway["code"] for gateway in response.json()}
-    assert {"razorpay_upi", "razorpay_card"} == codes
+    assert {"cod", "razorpay_upi", "razorpay_card"} == codes
 
 
 def test_tax_is_not_applied_at_checkout_but_at_payment(
@@ -218,6 +218,67 @@ def test_legacy_pay_endpoint_is_consistently_disabled(
         json={"provider": "razorpay_upi"},
     )
     assert second.status_code == 400
+
+
+def test_cod_payment_places_order_without_online_gateway(
+    client: TestClient,
+    customer_auth_headers: dict[str, str],
+    admin_auth_headers: dict[str, str],
+) -> None:
+    order = _create_order(client, customer_auth_headers, admin_auth_headers)
+
+    pay_response = client.post(
+        f"/api/v1/orders/{order['id']}/pay",
+        headers=customer_auth_headers,
+        json={"provider": "cod"},
+    )
+    assert pay_response.status_code == 200, pay_response.text
+
+    body = pay_response.json()
+    assert body["payment"]["provider"] == "cod"
+    assert body["payment"]["status"] == "cod_pending"
+    assert body["order"]["payment_status"] == "cod_pending"
+    assert body["order"]["payment_provider"] == "cod"
+    assert body["order"]["payment_transaction_ref"]
+
+
+def test_admin_order_list_is_paginated(
+    client: TestClient,
+    customer_auth_headers: dict[str, str],
+    admin_auth_headers: dict[str, str],
+) -> None:
+    for _ in range(11):
+        _create_order(client, customer_auth_headers, admin_auth_headers)
+
+    response = client.get("/api/v1/orders?limit=10&offset=0", headers=admin_auth_headers)
+    assert response.status_code == 200, response.text
+    body = response.json()
+    assert body["total"] >= 11
+    assert body["limit"] == 10
+    assert len(body["items"]) == 10
+    assert body["items"][0]["id"] > body["items"][-1]["id"]
+
+
+def test_cancel_unpaid_order_restores_cart(
+    client: TestClient,
+    customer_auth_headers: dict[str, str],
+    admin_auth_headers: dict[str, str],
+) -> None:
+    order = _create_order(client, customer_auth_headers, admin_auth_headers)
+
+    cancel_response = client.post(
+        f"/api/v1/orders/{order['id']}/cancel-unpaid",
+        headers=customer_auth_headers,
+    )
+    assert cancel_response.status_code == 200, cancel_response.text
+    assert cancel_response.json()["status"] == "restored"
+
+    order_response = client.get(f"/api/v1/orders/{order['id']}", headers=customer_auth_headers)
+    assert order_response.status_code == 404
+
+    cart_response = client.get("/api/v1/cart/me", headers=customer_auth_headers)
+    assert cart_response.status_code == 200, cart_response.text
+    assert len(cart_response.json()["items"]) == 1
 
 
 def test_cart_is_usable_after_checkout_conversion(

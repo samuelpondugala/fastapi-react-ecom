@@ -1,14 +1,25 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from sqlalchemy import select
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, selectinload
 
 from app.api.deps import get_admin_user, get_current_user
 from app.core.security import get_password_hash
 from app.db.session import get_db
+from app.models.order import Order, OrderItem
+from app.models.product import Product, ProductVariant
 from app.models.user import User
+from app.schemas.order import OrderRead
 from app.schemas.user import UserRead, UserUpdate
 
 router = APIRouter()
+
+
+USER_ORDER_LOAD = (
+    selectinload(Order.items)
+    .selectinload(OrderItem.variant)
+    .selectinload(ProductVariant.product)
+    .selectinload(Product.images)
+)
 
 
 @router.get("", response_model=list[UserRead])
@@ -35,6 +46,32 @@ def get_user(
     if not user:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
     return user
+
+
+@router.get("/{user_id}/orders", response_model=list[OrderRead])
+def list_user_orders(
+    user_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+    limit: int = 200,
+    offset: int = 0,
+) -> list[Order]:
+    if current_user.role != "admin" and current_user.id != user_id:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not allowed")
+
+    user = db.scalar(select(User).where(User.id == user_id))
+    if not user:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found")
+
+    statement = (
+        select(Order)
+        .options(USER_ORDER_LOAD, selectinload(Order.payments), selectinload(Order.user))
+        .where(Order.user_id == user_id)
+        .order_by(Order.id.desc())
+        .offset(offset)
+        .limit(limit)
+    )
+    return list(db.scalars(statement).all())
 
 
 @router.patch("/me", response_model=UserRead)

@@ -12,6 +12,7 @@ import LoginPage from './pages/LoginPage';
 import NotFoundPage from './pages/NotFoundPage';
 import OrderDetailPage from './pages/OrderDetailPage';
 import OrdersPage from './pages/OrdersPage';
+import PaymentResultPage from './pages/PaymentResultPage';
 import ProductPage from './pages/ProductPage';
 import ProfilePage from './pages/ProfilePage';
 import RegisterPage from './pages/RegisterPage';
@@ -55,6 +56,14 @@ export default function App() {
           <GuestOnly>
             <RegisterPage />
           </GuestOnly>
+        }
+      />
+      <Route
+        path="/orders/:orderId/payment-result"
+        element={
+          <ProtectedRoute>
+            <PaymentResultPage />
+          </ProtectedRoute>
         }
       />
 

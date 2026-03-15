@@ -1,15 +1,15 @@
 import json
 
 from fastapi import APIRouter, Depends, Header, HTTPException, Request, status
-from sqlalchemy import select
+from sqlalchemy import func, select
 from sqlalchemy.orm import Session, selectinload
 
-from app.api.deps import get_current_user
+from app.api.deps import get_admin_user, get_current_user
 from app.db.session import get_db
 from app.models.order import Order, OrderItem
 from app.models.product import Product, ProductVariant
 from app.models.user import User
-from app.schemas.order import CheckoutRequest, OrderRead
+from app.schemas.order import CheckoutRequest, OrderPageRead, OrderRead
 from app.schemas.payment import (
     OrderPaymentRequest,
     OrderPaymentResult,
@@ -19,7 +19,7 @@ from app.schemas.payment import (
     RazorpayOrderCreateRequest,
     RazorpayPaymentVerifyRequest,
 )
-from app.services.order import create_order_from_active_cart
+from app.services.order import create_order_from_active_cart, restore_unpaid_order_to_cart
 from app.services.payment import (
     FREE_PAYMENT_GATEWAYS,
     build_payment_quote,
@@ -36,8 +36,16 @@ ORDER_DETAIL_LOAD = (
     selectinload(Order.items)
     .selectinload(OrderItem.variant)
     .selectinload(ProductVariant.product)
-    .selectinload(Product.images)
+    .selectinload(Product.images),
+    selectinload(Order.payments),
+    selectinload(Order.user).load_only(User.id, User.email, User.full_name),
 )
+
+
+def _apply_order_load(statement):
+    for option in ORDER_DETAIL_LOAD:
+        statement = statement.options(option)
+    return statement
 
 
 def _authorize_order_access(order: Order, current_user: User) -> None:
@@ -46,7 +54,7 @@ def _authorize_order_access(order: Order, current_user: User) -> None:
 
 
 def _get_order_or_404(db: Session, order_id: int) -> Order:
-    order = db.scalar(select(Order).options(ORDER_DETAIL_LOAD).where(Order.id == order_id))
+    order = db.scalar(_apply_order_load(select(Order)).where(Order.id == order_id))
     if not order:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Order not found")
     return order
@@ -78,7 +86,40 @@ def checkout(
         coupon_code=payload.coupon_code,
     )
     db.commit()
-    return db.scalar(select(Order).options(ORDER_DETAIL_LOAD).where(Order.id == order.id))
+    return db.scalar(_apply_order_load(select(Order)).where(Order.id == order.id))
+
+
+@router.get("", response_model=OrderPageRead, summary="List all orders for admin")
+def list_orders(
+    db: Session = Depends(get_db),
+    _: User = Depends(get_admin_user),
+    limit: int = 10,
+    offset: int = 0,
+    user_id: int | None = None,
+) -> OrderPageRead:
+    limit = min(max(limit, 1), 100)
+    offset = max(offset, 0)
+
+    filters = []
+    if user_id is not None:
+        filters.append(Order.user_id == user_id)
+
+    count_statement = select(func.count(Order.id))
+    if filters:
+        count_statement = count_statement.where(*filters)
+    total = db.scalar(count_statement) or 0
+
+    statement = _apply_order_load(select(Order))
+    if filters:
+        statement = statement.where(*filters)
+    statement = statement.order_by(Order.id.desc()).offset(offset).limit(limit)
+
+    return OrderPageRead(
+        items=list(db.scalars(statement).all()),
+        total=total,
+        limit=limit,
+        offset=offset,
+    )
 
 
 @router.get("/me", response_model=list[OrderRead], summary="List my orders")
@@ -88,14 +129,8 @@ def list_my_orders(
     limit: int = 50,
     offset: int = 0,
 ) -> list[Order]:
-    statement = (
-        select(Order)
-        .options(ORDER_DETAIL_LOAD)
-        .where(Order.user_id == current_user.id)
-        .order_by(Order.id.desc())
-        .offset(offset)
-        .limit(limit)
-    )
+    statement = _apply_order_load(select(Order)).where(Order.user_id == current_user.id).order_by(Order.id.desc())
+    statement = statement.offset(offset).limit(limit)
     return list(db.scalars(statement).all())
 
 
@@ -272,3 +307,19 @@ def pay_order(
             total_amount=quote.total_amount,
         ),
     )
+
+
+@router.post(
+    "/{order_id}/cancel-unpaid",
+    summary="Cancel an unpaid order and restore its cart items",
+)
+def cancel_unpaid_order(
+    order_id: int,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> dict[str, object]:
+    order = _get_order_or_404(db, order_id)
+    _authorize_order_access(order, current_user)
+    cart = restore_unpaid_order_to_cart(db, order)
+    db.commit()
+    return {"status": "restored", "cart_id": cart.id}

@@ -44,6 +44,8 @@ class OrderRead(ORMModel):
     id: int
     user_id: int
     order_number: str
+    customer_email: str | None = None
+    customer_name: str | None = None
     status: str
     payment_status: str
     fulfillment_status: str
@@ -54,5 +56,18 @@ class OrderRead(ORMModel):
     grand_total: Decimal
     shipping_address_id: int | None
     billing_address_id: int | None
+    payment_provider: str | None = None
+    payment_transaction_ref: str | None = None
+    payment_record_status: str | None = None
+    payment_amount: Decimal | None = None
+    payment_currency: str | None = None
+    payment_paid_at: datetime | None = None
     placed_at: datetime
     items: list[OrderItemRead] = []
+
+
+class OrderPageRead(BaseModel):
+    items: list[OrderRead]
+    total: int
+    limit: int
+    offset: int

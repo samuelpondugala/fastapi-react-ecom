@@ -11,6 +11,7 @@ from app.models.cart import Cart, CartItem
 from app.models.inventory import InventoryMovement
 from app.models.order import Coupon, Order, OrderCoupon, OrderItem
 from app.models.product import ProductVariant
+from app.services.cart import get_or_create_active_cart
 
 FREE_DELIVERY_THRESHOLD = Decimal("1000.00")
 DELIVERY_CHARGE = Decimal("100.00")
@@ -177,3 +178,43 @@ def create_order_from_active_cart(
     db.flush()
     db.refresh(order)
     return order
+
+
+def restore_unpaid_order_to_cart(db: Session, order: Order) -> Cart:
+    paid_states = {"paid", "captured"}
+    if order.payment_status == "paid" or any((payment.status or "").lower() in paid_states for payment in order.payments):
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Paid orders cannot be cancelled")
+
+    cart = get_or_create_active_cart(db, order.user_id)
+    existing_items = {item.variant_id: item for item in cart.items}
+
+    for order_item in order.items:
+        cart_item = existing_items.get(order_item.variant_id)
+        if cart_item:
+            cart_item.quantity += order_item.quantity
+            cart_item.unit_price = order_item.unit_price
+            db.add(cart_item)
+            continue
+
+        db.add(
+            CartItem(
+                cart_id=cart.id,
+                variant_id=order_item.variant_id,
+                quantity=order_item.quantity,
+                unit_price=order_item.unit_price,
+            )
+        )
+
+    movements = db.scalars(
+        select(InventoryMovement).where(
+            InventoryMovement.reference_type == "order",
+            InventoryMovement.reference_id == order.id,
+        )
+    ).all()
+    for movement in movements:
+        db.delete(movement)
+
+    db.delete(order)
+    db.flush()
+    db.refresh(cart)
+    return cart

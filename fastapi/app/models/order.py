@@ -1,4 +1,4 @@
-from datetime import datetime
+from datetime import datetime, timezone
 from decimal import Decimal
 
 from sqlalchemy import DateTime, ForeignKey, JSON, Numeric, String, UniqueConstraint, func
@@ -29,9 +29,62 @@ class Order(Base):
     shipping_address = relationship("Address", foreign_keys=[shipping_address_id], back_populates="shipping_orders")
     billing_address = relationship("Address", foreign_keys=[billing_address_id], back_populates="billing_orders")
     items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
-    payments = relationship("Payment", back_populates="order", cascade="all, delete-orphan")
+    payments = relationship("Payment", back_populates="order", cascade="all, delete-orphan", order_by="Payment.id.desc()")
     shipments = relationship("Shipment", back_populates="order", cascade="all, delete-orphan")
     coupons = relationship("OrderCoupon", back_populates="order", cascade="all, delete-orphan")
+
+    @property
+    def latest_payment(self) -> "Payment | None":
+        if not self.payments:
+            return None
+
+        def sort_key(payment: "Payment") -> tuple[datetime, int]:
+            paid_at = payment.paid_at
+            if paid_at is None:
+                paid_at = datetime.min.replace(tzinfo=timezone.utc)
+            elif paid_at.tzinfo is None:
+                paid_at = paid_at.replace(tzinfo=timezone.utc)
+            return paid_at, payment.id
+
+        return max(self.payments, key=sort_key)
+
+    @property
+    def customer_email(self) -> str | None:
+        return self.user.email if self.user else None
+
+    @property
+    def customer_name(self) -> str | None:
+        return self.user.full_name if self.user else None
+
+    @property
+    def payment_provider(self) -> str | None:
+        payment = self.latest_payment
+        return payment.provider if payment else None
+
+    @property
+    def payment_transaction_ref(self) -> str | None:
+        payment = self.latest_payment
+        return payment.transaction_ref if payment else None
+
+    @property
+    def payment_record_status(self) -> str | None:
+        payment = self.latest_payment
+        return payment.status if payment else None
+
+    @property
+    def payment_amount(self) -> Decimal | None:
+        payment = self.latest_payment
+        return payment.amount if payment else None
+
+    @property
+    def payment_currency(self) -> str | None:
+        payment = self.latest_payment
+        return payment.currency if payment else None
+
+    @property
+    def payment_paid_at(self) -> datetime | None:
+        payment = self.latest_payment
+        return payment.paid_at if payment else None
 
 
 class OrderItem(Base):

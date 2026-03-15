@@ -22,6 +22,13 @@ const emptyAddress = {
 
 const paymentOptions = [
   {
+    id: 'cod',
+    label: 'Cash on Delivery',
+    description: 'Confirm the order now and pay when it is delivered',
+    provider: 'cod',
+    methods: ['Pay at doorstep'],
+  },
+  {
     id: 'upi',
     label: 'UPI',
     description: 'Instant payment via UPI apps',
@@ -222,6 +229,7 @@ export default function CheckoutPage() {
   async function placeOrder() {
     setSubmitting(true);
     setError('');
+    let createdOrderId = null;
     try {
       const order = await api.orders.checkout(token, {
         shipping_address_id: shippingAddressId ? Number(shippingAddressId) : null,
@@ -230,10 +238,36 @@ export default function CheckoutPage() {
         shipping_total: String(shippingCharge.toFixed(2)),
         tax_total: '0.00',
       });
+      createdOrderId = order.id;
 
-      successToast(`Order created. Continue with ${selectedPaymentOption.label} payment.`);
-      navigate(`/orders/${order.id}?provider=${selectedPaymentOption.provider}`);
+      if (selectedPaymentOption.provider === 'cod') {
+        const codResult = await api.orders.payOrder(token, order.id, {
+          provider: 'cod',
+          currency: 'INR',
+          apply_tax: false,
+          tax_mode: 'none',
+          tax_value: '0.00',
+          metadata: {
+            initiated_from: 'checkout',
+          },
+        });
+        successToast('Order placed with Cash on Delivery.');
+        navigate(`/orders/${codResult.order.id}`, { replace: true });
+        return;
+      }
+
+      successToast(`Order created. Redirecting to ${selectedPaymentOption.label} payment.`);
+      navigate(`/orders/${order.id}?provider=${selectedPaymentOption.provider}&autostart=1&checkout=1`, {
+        replace: true,
+      });
     } catch (err) {
+      if (selectedPaymentOption.provider === 'cod' && createdOrderId) {
+        try {
+          await api.orders.cancelUnpaid(token, createdOrderId);
+        } catch {
+          // Ignore cleanup failures; the API error is the primary signal for the UI.
+        }
+      }
       setError(err.message || 'Checkout failed.');
     } finally {
       setSubmitting(false);
@@ -514,7 +548,13 @@ export default function CheckoutPage() {
               <strong>{formatMoney(payableTotal)}</strong>
             </p>
             <button className="btn" type="button" disabled={submitting} onClick={placeOrder}>
-              {submitting ? 'Placing order...' : 'Place order'}
+              {submitting
+                ? selectedPaymentOption.provider === 'cod'
+                  ? 'Placing COD order...'
+                  : 'Opening payment...'
+                : selectedPaymentOption.provider === 'cod'
+                  ? 'Place COD order'
+                  : 'Place order and pay'}
             </button>
           </div>
         </div>

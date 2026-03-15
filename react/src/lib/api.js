@@ -102,6 +102,7 @@ export const api = {
   users: {
     list: (token, query) => request('/users', { token, query }),
     getById: (token, id) => request(`/users/${id}`, { token }),
+    listOrders: (token, id, query) => request(`/users/${id}/orders`, { token, query }),
     updateMe: (token, payload) => request('/users/me', { method: 'PATCH', token, body: payload }),
   },
   addresses: {
@@ -134,6 +135,7 @@ export const api = {
   },
   orders: {
     checkout: (token, payload) => request('/orders/checkout', { method: 'POST', token, body: payload }),
+    listAdmin: (token, query) => request('/orders', { token, query }),
     listMine: (token, query) => request('/orders/me', { token, query }),
     getById: (token, id) => request(`/orders/${id}`, { token }),
     listFreeGateways: (token) => request('/orders/payment-gateways/free', { token }),
@@ -144,6 +146,7 @@ export const api = {
       request(`/orders/${id}/payment/razorpay/order`, { method: 'POST', token, body: payload }),
     verifyRazorpayPayment: (token, id, payload) =>
       request(`/orders/${id}/payment/razorpay/verify`, { method: 'POST', token, body: payload }),
+    cancelUnpaid: (token, id) => request(`/orders/${id}/cancel-unpaid`, { method: 'POST', token }),
   },
   coupons: {
     list: (token, query) => request('/coupons', { token, query }),

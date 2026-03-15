@@ -1,10 +1,16 @@
-import { useEffect, useMemo, useState } from 'react';
-import { Link, useParams, useSearchParams } from 'react-router-dom';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Link, useNavigate, useParams, useSearchParams } from 'react-router-dom';
 
 import StatusPill from '../components/StatusPill';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import { estimateDeliveryDate, formatDate, formatMoney } from '../lib/format';
+import {
+  estimateDeliveryDate,
+  formatDate,
+  formatMoney,
+  formatPaymentProvider,
+  formatPaymentReference,
+} from '../lib/format';
 import { errorToast, successToast } from '../lib/toast';
 
 const RAZORPAY_SCRIPT_ID = 'razorpay-checkout-script';
@@ -33,6 +39,11 @@ function loadRazorpayCheckoutScript() {
 }
 
 const paymentModeDefinitions = [
+  {
+    provider: 'cod',
+    label: 'Cash on Delivery',
+    description: 'Bypass online payment and collect cash when the order arrives.',
+  },
   { provider: 'razorpay_upi', label: 'UPI', description: 'Google Pay / PhonePe / Paytm UPI' },
   { provider: 'razorpay_card', label: 'Credit / Debit Card', description: 'Visa / MasterCard / RuPay / Amex' },
 ];
@@ -58,19 +69,38 @@ const initialPaymentPayload = {
   metadata: {},
 };
 
+function isRazorpayProvider(provider) {
+  return provider === 'razorpay_upi' || provider === 'razorpay_card';
+}
+
+function buildPaymentResultPath(orderId, status, details = {}) {
+  const params = new URLSearchParams({ status });
+  Object.entries(details).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      params.set(key, String(value));
+    }
+  });
+  return `/orders/${orderId}/payment-result?${params.toString()}`;
+}
+
 export default function OrderDetailPage() {
+  const navigate = useNavigate();
   const { token, isAdmin, user } = useAuth();
   const { orderId } = useParams();
   const [searchParams] = useSearchParams();
+
+  const checkoutFlow = searchParams.get('checkout') === '1';
+  const autoStartPayment = searchParams.get('autostart') === '1';
 
   const [order, setOrder] = useState(null);
   const [gateways, setGateways] = useState([]);
   const [payload, setPayload] = useState(initialPaymentPayload);
   const [quote, setQuote] = useState(null);
-  const [paymentResult, setPaymentResult] = useState(null);
   const [error, setError] = useState('');
   const [loading, setLoading] = useState(true);
   const [processingRazorpay, setProcessingRazorpay] = useState(false);
+  const [processingCod, setProcessingCod] = useState(false);
+  const autoLaunchAttemptedRef = useRef(false);
 
   async function loadOrder() {
     setLoading(true);
@@ -91,7 +121,7 @@ export default function OrderDetailPage() {
 
   useEffect(() => {
     loadOrder();
-  }, [orderId]);
+  }, [orderId, token]);
 
   useEffect(() => {
     const providerFromQuery = searchParams.get('provider');
@@ -102,6 +132,8 @@ export default function OrderDetailPage() {
   }, [searchParams]);
 
   const availableProviders = useMemo(() => new Set(gateways.map((item) => item.code)), [gateways]);
+  const selectedPaymentDefinition =
+    paymentModeDefinitions.find((option) => option.provider === payload.provider) || paymentModeDefinitions[0];
 
   function setField(name, value) {
     setPayload((prev) => ({ ...prev, [name]: value }));
@@ -120,7 +152,70 @@ export default function OrderDetailPage() {
     }
   }
 
+  async function navigateToFailureScreen(message) {
+    if (!checkoutFlow) return;
+
+    try {
+      await api.orders.cancelUnpaid(token, orderId);
+    } catch (err) {
+      if (err?.status === 409) {
+        successToast('Payment state changed while closing checkout. Please confirm the order status.');
+        navigate(`/orders/${orderId}`, { replace: true });
+        return;
+      }
+    }
+
+    navigate(
+      buildPaymentResultPath(orderId, 'failure', {
+        provider: payload.provider,
+        message,
+      }),
+      { replace: true }
+    );
+  }
+
+  function navigateToSuccessScreen(result) {
+    navigate(
+      buildPaymentResultPath(orderId, 'success', {
+        provider: result.payment.provider,
+        ref: result.payment.transaction_ref,
+        order: result.order.order_number,
+      }),
+      { replace: true }
+    );
+  }
+
+  async function submitCodPayment() {
+    setProcessingCod(true);
+    setError('');
+    try {
+      const result = await api.orders.payOrder(token, orderId, {
+        provider: 'cod',
+        currency: 'INR',
+        apply_tax: false,
+        tax_mode: 'none',
+        tax_value: '0.00',
+        metadata: {
+          initiated_from: checkoutFlow ? 'checkout' : 'order_detail',
+        },
+      });
+      setOrder(result.order);
+      setQuote(result.quote);
+      successToast('Cash on Delivery enabled for this order.');
+      navigate(`/orders/${result.order.id}`, { replace: true });
+    } catch (err) {
+      setError(err.message || 'Could not enable Cash on Delivery.');
+    } finally {
+      setProcessingCod(false);
+    }
+  }
+
   async function submitPayment() {
+    if (payload.provider === 'cod') {
+      await submitCodPayment();
+      return;
+    }
+
     setProcessingRazorpay(true);
     try {
       const scriptLoaded = await loadRazorpayCheckoutScript();
@@ -130,7 +225,10 @@ export default function OrderDetailPage() {
 
       const checkoutOrder = await api.orders.createRazorpayOrder(token, orderId, {
         provider: payload.provider,
-        metadata: payload.metadata,
+        metadata: {
+          ...(payload.metadata || {}),
+          initiated_from: checkoutFlow ? 'checkout' : 'order_detail',
+        },
       });
 
       const method =
@@ -179,13 +277,16 @@ export default function OrderDetailPage() {
               razorpay_signature: response.razorpay_signature,
               metadata: payload.metadata,
             });
-            setPaymentResult(result);
             setOrder(result.order);
             setQuote(result.quote);
             setError('');
             successToast('Razorpay payment verified successfully.');
+            navigateToSuccessScreen(result);
           } catch (err) {
-            setError(err.message || 'Razorpay signature verification failed.');
+            const message =
+              err.message || 'Payment was received but could not be verified automatically. Please refresh the order.';
+            setError(message);
+            errorToast(message);
           } finally {
             setProcessingRazorpay(false);
           }
@@ -193,6 +294,9 @@ export default function OrderDetailPage() {
         modal: {
           ondismiss: () => {
             setProcessingRazorpay(false);
+            if (checkoutFlow) {
+              void navigateToFailureScreen('Payment window closed before completion.');
+            }
           },
         },
       };
@@ -203,6 +307,9 @@ export default function OrderDetailPage() {
         const message = event?.error?.description || 'Payment failed in Razorpay.';
         setError(message);
         errorToast(message);
+        if (checkoutFlow) {
+          void navigateToFailureScreen(message);
+        }
       });
       razorpay.open();
     } catch (err) {
@@ -210,6 +317,16 @@ export default function OrderDetailPage() {
       setError(err.message || 'Unable to start Razorpay checkout.');
     }
   }
+
+  useEffect(() => {
+    if (loading || !order || !autoStartPayment || autoLaunchAttemptedRef.current) return;
+    if (order.payment_status !== 'unpaid') return;
+    if (!isRazorpayProvider(payload.provider)) return;
+    if (availableProviders.size > 0 && !availableProviders.has(payload.provider)) return;
+
+    autoLaunchAttemptedRef.current = true;
+    void submitPayment();
+  }, [autoStartPayment, availableProviders, loading, order, payload.provider]);
 
   if (loading) {
     return (
@@ -223,6 +340,9 @@ export default function OrderDetailPage() {
   if (!order) return <div className="alert alert--error">Order not found.</div>;
 
   const expectedDelivery = estimateDeliveryDate(5);
+  const paymentModeLabel = formatPaymentProvider(order.payment_provider);
+  const paymentReference = formatPaymentReference(order.payment_provider, order.payment_transaction_ref);
+  const canCollectPayment = order.payment_status === 'unpaid';
 
   return (
     <section className="section fade-in order-detail-page">
@@ -267,6 +387,28 @@ export default function OrderDetailPage() {
               <p>
                 <span>Grand Total</span>
                 <strong>{formatMoney(order.grand_total)}</strong>
+              </p>
+            </div>
+          </div>
+
+          <div className="card">
+            <h3>Payment Detail</h3>
+            <div className="payment-detail-grid">
+              <p>
+                <span>Mode</span>
+                <strong>{paymentModeLabel}</strong>
+              </p>
+              <p>
+                <span>Status</span>
+                <strong>{order.payment_record_status || order.payment_status}</strong>
+              </p>
+              <p>
+                <span>{order.payment_provider === 'cod' ? 'Payment' : 'Transaction ID'}</span>
+                <strong>{paymentReference}</strong>
+              </p>
+              <p>
+                <span>Recorded</span>
+                <strong>{order.payment_paid_at ? formatDate(order.payment_paid_at) : 'Pending at delivery'}</strong>
               </p>
             </div>
           </div>
@@ -331,24 +473,59 @@ export default function OrderDetailPage() {
 
         <div className="stack-gap order-detail-layout__right">
           <div className="card">
-            <h3>Step 2: Select Payment Mode</h3>
-            <div className="payment-modes">
-              {paymentModeDefinitions
-                .filter((option) => availableProviders.size === 0 || availableProviders.has(option.provider))
-                .map((option) => (
-                  <button
-                    key={option.provider}
-                    type="button"
-                    className={`payment-mode-card ${
-                      payload.provider === option.provider ? 'payment-mode-card--active' : ''
-                    }`}
-                    onClick={() => setField('provider', option.provider)}
-                  >
-                    <strong>{option.label}</strong>
-                    <p className="small muted">{option.description}</p>
-                  </button>
-                ))}
+            <h3>Customer & Fulfillment</h3>
+            <div className="payment-detail-grid">
+              <p>
+                <span>Customer</span>
+                <strong>{order.customer_name || order.customer_email || `User #${order.user_id}`}</strong>
+              </p>
+              <p>
+                <span>Email</span>
+                <strong>{order.customer_email || '--'}</strong>
+              </p>
+              <p>
+                <span>Shipping address</span>
+                <strong>{order.shipping_address_id ? `Address #${order.shipping_address_id}` : 'Not set'}</strong>
+              </p>
+              <p>
+                <span>Billing address</span>
+                <strong>{order.billing_address_id ? `Address #${order.billing_address_id}` : 'Not set'}</strong>
+              </p>
             </div>
+          </div>
+
+          <div className="card">
+            <h3>Step 2: Select Payment Mode</h3>
+            {canCollectPayment ? (
+              <div className="payment-modes">
+                {paymentModeDefinitions
+                  .filter((option) => availableProviders.size === 0 || availableProviders.has(option.provider))
+                  .map((option) => (
+                    <button
+                      key={option.provider}
+                      type="button"
+                      className={`payment-mode-card ${
+                        payload.provider === option.provider ? 'payment-mode-card--active' : ''
+                      }`}
+                      onClick={() => setField('provider', option.provider)}
+                    >
+                      <strong>{option.label}</strong>
+                      <p className="small muted">{option.description}</p>
+                    </button>
+                  ))}
+              </div>
+            ) : (
+              <div className="card card--inset">
+                <p>
+                  Payment mode: <strong>{paymentModeLabel}</strong>
+                </p>
+                <p className="small muted">
+                  {order.payment_provider === 'cod'
+                    ? 'This order will be paid when it is delivered.'
+                    : `Transaction ID: ${paymentReference}`}
+                </p>
+              </div>
+            )}
           </div>
 
           <div className="card">
@@ -366,52 +543,85 @@ export default function OrderDetailPage() {
 
           <div className="card">
             <h3>Step 3: Quote & Pay</h3>
-            {isAdmin && <p className="chip">Admin can pay any order ID.</p>}
+            {isAdmin && <p className="chip">Admin can inspect or complete payment for any order.</p>}
+            {!canCollectPayment && (
+              <div className="card card--inset">
+                <p>
+                  <strong>Payment already configured</strong>
+                </p>
+                <p className="small muted">No further action is needed from this screen.</p>
+              </div>
+            )}
 
-            <label>
-              Currency
-              <input value={payload.currency} onChange={(event) => setField('currency', event.target.value.toUpperCase())} />
-            </label>
+            {canCollectPayment && (
+              <>
+                <label>
+                  Currency
+                  <input
+                    value={payload.currency}
+                    onChange={(event) => setField('currency', event.target.value.toUpperCase())}
+                    disabled={payload.provider === 'cod'}
+                  />
+                </label>
 
-            <label className="checkbox-row">
-              <input
-                type="checkbox"
-                checked={payload.apply_tax}
-                onChange={(event) => setField('apply_tax', event.target.checked)}
-              />
-              Apply tax at payment
-            </label>
+                <label className="checkbox-row">
+                  <input
+                    type="checkbox"
+                    checked={payload.apply_tax}
+                    onChange={(event) => setField('apply_tax', event.target.checked)}
+                    disabled={payload.provider === 'cod'}
+                  />
+                  Apply tax at payment
+                </label>
 
-            <div className="grid-two">
-              <label>
-                Tax mode
-                <select value={payload.tax_mode} onChange={(event) => setField('tax_mode', event.target.value)}>
-                  <option value="none">none</option>
-                  <option value="fixed">fixed</option>
-                  <option value="percent">percent</option>
-                </select>
-              </label>
+                <div className="grid-two">
+                  <label>
+                    Tax mode
+                    <select
+                      value={payload.tax_mode}
+                      onChange={(event) => setField('tax_mode', event.target.value)}
+                      disabled={payload.provider === 'cod'}
+                    >
+                      <option value="none">none</option>
+                      <option value="fixed">fixed</option>
+                      <option value="percent">percent</option>
+                    </select>
+                  </label>
 
-              <label>
-                Tax value
-                <input
-                  type="number"
-                  min="0"
-                  step="0.01"
-                  value={payload.tax_value}
-                  onChange={(event) => setField('tax_value', event.target.value)}
-                />
-              </label>
-            </div>
+                  <label>
+                    Tax value
+                    <input
+                      type="number"
+                      min="0"
+                      step="0.01"
+                      value={payload.tax_value}
+                      onChange={(event) => setField('tax_value', event.target.value)}
+                      disabled={payload.provider === 'cod'}
+                    />
+                  </label>
+                </div>
 
-            <div className="row-gap">
-              <button className="btn btn--ghost" type="button" onClick={getQuote}>
-                Get Quote
-              </button>
-              <button className="btn" type="button" onClick={submitPayment} disabled={processingRazorpay}>
-                {processingRazorpay ? 'Opening Razorpay...' : 'Pay Now'}
-              </button>
-            </div>
+                <div className="row-gap">
+                  <button className="btn btn--ghost" type="button" onClick={getQuote}>
+                    Get Quote
+                  </button>
+                  <button
+                    className="btn"
+                    type="button"
+                    onClick={submitPayment}
+                    disabled={processingRazorpay || processingCod}
+                  >
+                    {payload.provider === 'cod'
+                      ? processingCod
+                        ? 'Saving COD...'
+                        : 'Confirm COD'
+                      : processingRazorpay
+                        ? 'Opening Razorpay...'
+                        : `Pay with ${selectedPaymentDefinition.label}`}
+                  </button>
+                </div>
+              </>
+            )}
 
             {quote && (
               <div className="card card--inset">
@@ -428,16 +638,6 @@ export default function OrderDetailPage() {
                 <p>
                   Total: <strong>{formatMoney(quote.total_amount)}</strong>
                 </p>
-              </div>
-            )}
-
-            {paymentResult && (
-              <div className="card card--inset">
-                <h4>Payment Result</h4>
-                <p>
-                  Status: <StatusPill value={paymentResult.payment.status} />
-                </p>
-                <p className="small muted">Reference: {paymentResult.payment.transaction_ref}</p>
               </div>
             )}
           </div>

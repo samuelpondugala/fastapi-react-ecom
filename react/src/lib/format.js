@@ -1,4 +1,9 @@
 const USD_TO_INR_RATE = 83;
+const PAYMENT_PROVIDER_LABELS = {
+  cod: 'Cash on Delivery',
+  razorpay_upi: 'UPI',
+  razorpay_card: 'Card',
+};
 
 function toNumber(value) {
   const numberValue = typeof value === 'string' ? Number.parseFloat(value) : value;
@@ -37,4 +42,14 @@ export function estimateDeliveryDate(daysFromNow = 4) {
     month: 'short',
     day: '2-digit',
   });
+}
+
+export function formatPaymentProvider(provider) {
+  if (!provider) return 'Payment pending';
+  return PAYMENT_PROVIDER_LABELS[provider] || provider.replaceAll('_', ' ').replace(/\b\w/g, (char) => char.toUpperCase());
+}
+
+export function formatPaymentReference(provider, reference) {
+  if (provider === 'cod') return 'COD';
+  return reference || '--';
 }

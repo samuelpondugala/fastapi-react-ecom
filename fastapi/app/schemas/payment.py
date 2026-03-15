@@ -20,6 +20,7 @@ class PaymentGatewayRead(BaseModel):
 
 class OrderPaymentRequest(BaseModel):
     provider: Literal[
+        "cod",
         "razorpay_upi",
         "razorpay_card",
     ] = Field(

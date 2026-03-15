@@ -22,6 +22,15 @@ RAZORPAY_API_BASE_URL = "https://api.razorpay.com/v1"
 
 FREE_PAYMENT_GATEWAYS: tuple[dict[str, object], ...] = (
     {
+        "code": "cod",
+        "name": "Cash on Delivery",
+        "description": "Place the order now and pay when it arrives.",
+        "requires_external_account": False,
+        "gateway_fee_note": "Collected by your delivery workflow",
+        "methods": ["cash_on_delivery"],
+        "category": "offline",
+    },
+    {
         "code": "razorpay_upi",
         "name": "Razorpay UPI",
         "description": "UPI collection flow via Razorpay integration (configured in production).",
@@ -131,8 +140,8 @@ def create_razorpay_checkout_order(
     if provider not in {"razorpay_upi", "razorpay_card"}:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported Razorpay provider")
 
-    if order.payment_status == "paid":
-        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order already paid")
+    if order.payment_status != "unpaid":
+        raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order is not available for Razorpay payment")
 
     key_id, _ = _require_razorpay_credentials()
     amount_inr = _calculate_base_amount(order)
@@ -393,6 +402,51 @@ def process_order_payment(
 ) -> tuple[Payment, Order, PaymentQuote]:
     if provider not in SUPPORTED_GATEWAYS:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported payment gateway")
+
+    if provider == "cod":
+        if currency.upper() != "INR":
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Cash on Delivery supports INR only")
+
+        existing_payment = db.scalar(
+            select(Payment).where(Payment.order_id == order.id, Payment.provider == "cod").order_by(Payment.id.desc())
+        )
+        quote = build_payment_quote(order, apply_tax=False, tax_mode="none", tax_value=Decimal("0.00"))
+
+        if existing_payment:
+            return existing_payment, order, quote
+
+        if order.payment_status == "paid":
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Order already paid")
+        if order.payment_status == "cod_pending":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail="Cash on Delivery is already enabled for this order",
+            )
+
+        payment = Payment(
+            order_id=order.id,
+            provider="cod",
+            transaction_ref=_build_transaction_ref("cod"),
+            amount=quote.total_amount,
+            currency="INR",
+            status="cod_pending",
+            paid_at=None,
+            raw_payload_json={
+                "gateway": "cod",
+                "provider": "cod",
+                "metadata": metadata or {},
+            },
+        )
+        db.add(payment)
+
+        order.payment_status = "cod_pending"
+        if order.status in {"placed", "pending", "confirmed"}:
+            order.status = "processing"
+        db.add(order)
+        db.flush()
+        db.refresh(payment)
+        db.refresh(order)
+        return payment, order, quote
 
     raise HTTPException(
         status_code=status.HTTP_400_BAD_REQUEST,

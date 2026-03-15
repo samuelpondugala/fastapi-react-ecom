@@ -4,7 +4,7 @@ import { Link } from 'react-router-dom';
 import StatusPill from '../components/StatusPill';
 import { useAuth } from '../context/AuthContext';
 import { api } from '../lib/api';
-import { formatDate, formatMoney } from '../lib/format';
+import { formatDate, formatMoney, formatPaymentProvider, formatPaymentReference } from '../lib/format';
 
 export default function OrdersPage() {
   const { token } = useAuth();
@@ -87,6 +87,10 @@ export default function OrdersPage() {
             <div className="order-card__meta">
               <StatusPill value={order.status} />
               <StatusPill value={order.payment_status} />
+              <span className="small muted">
+                {formatPaymentProvider(order.payment_provider)} •{' '}
+                {formatPaymentReference(order.payment_provider, order.payment_transaction_ref)}
+              </span>
               <strong>{formatMoney(order.grand_total)}</strong>
             </div>
 
