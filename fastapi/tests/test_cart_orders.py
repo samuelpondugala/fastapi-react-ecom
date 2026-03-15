@@ -485,6 +485,8 @@ def test_razorpay_create_order_and_verify_signature_flow(
     verify_body = verify_response.json()
     assert verify_body["payment"]["status"] == "paid"
     assert verify_body["order"]["payment_status"] == "paid"
+    assert verify_body["payment"]["provider"] == "razorpay_upi"
+    assert verify_body["order"]["payment_provider"] == "razorpay_upi"
     assert verify_body["payment"]["transaction_ref"] == "pay_test_1"
 
 
@@ -506,9 +508,10 @@ def test_razorpay_webhook_marks_order_paid(
                     "amount": int((Decimal(order["grand_total"]) * Decimal("100")).quantize(Decimal("1"))),
                     "currency": "INR",
                     "status": "captured",
+                    "method": "upi",
                     "notes": {
                         "internal_order_id": str(order["id"]),
-                        "provider": "razorpay_upi",
+                        "provider": "razorpay_card",
                     },
                 }
             }
@@ -531,6 +534,7 @@ def test_razorpay_webhook_marks_order_paid(
     order_response = client.get(f"/api/v1/orders/{order['id']}", headers=customer_auth_headers)
     assert order_response.status_code == 200
     assert order_response.json()["payment_status"] == "paid"
+    assert order_response.json()["payment_provider"] == "razorpay_upi"
 
 
 def test_online_checkout_start_does_not_create_order_until_payment_is_verified(
@@ -607,6 +611,8 @@ def test_online_checkout_start_does_not_create_order_until_payment_is_verified(
     assert complete_response.status_code == 200, complete_response.text
     complete_body = complete_response.json()
     assert complete_body["order"]["payment_status"] == "paid"
+    assert complete_body["payment"]["provider"] == "razorpay_upi"
+    assert complete_body["order"]["payment_provider"] == "razorpay_upi"
     assert complete_body["payment"]["transaction_ref"] == "pay_checkout_test_1"
 
     orders_after_payment = client.get("/api/v1/orders/me", headers=customer_auth_headers)
@@ -656,3 +662,64 @@ def test_online_checkout_start_leaves_cart_intact_when_payment_not_completed(
     orders_response = client.get("/api/v1/orders/me", headers=customer_auth_headers)
     assert orders_response.status_code == 200, orders_response.text
     assert orders_response.json() == []
+
+
+def test_razorpay_payment_records_actual_gateway_method_when_it_differs_from_selection(
+    client: TestClient,
+    customer_auth_headers: dict[str, str],
+    admin_auth_headers: dict[str, str],
+    monkeypatch,
+) -> None:
+    order = _create_order(client, customer_auth_headers, admin_auth_headers)
+    expected_amount_paise = int((Decimal(order["grand_total"]) * Decimal("100")).quantize(Decimal("1")))
+
+    monkeypatch.setattr("app.services.payment._require_razorpay_credentials", lambda: ("rzp_test_key", "test_secret"))
+
+    def fake_razorpay_request(method: str, path: str, payload: dict | None = None) -> dict:
+        if method == "POST" and path == "/orders":
+            assert payload is not None
+            return {
+                "id": "order_rzp_test_actual_method",
+                "amount": payload["amount"],
+                "currency": payload["currency"],
+                "status": "created",
+            }
+        if method == "GET" and path == "/payments/pay_test_actual_method":
+            return {
+                "id": "pay_test_actual_method",
+                "order_id": "order_rzp_test_actual_method",
+                "amount": expected_amount_paise,
+                "currency": "INR",
+                "status": "captured",
+                "method": "card",
+            }
+        raise AssertionError(f"Unexpected Razorpay call {method} {path}")
+
+    monkeypatch.setattr("app.services.payment._razorpay_request", fake_razorpay_request)
+
+    create_response = client.post(
+        f"/api/v1/orders/{order['id']}/payment/razorpay/order",
+        headers=customer_auth_headers,
+        json={"provider": "razorpay_upi"},
+    )
+    assert create_response.status_code == 200, create_response.text
+
+    signature = hmac.new(
+        b"test_secret",
+        b"order_rzp_test_actual_method|pay_test_actual_method",
+        hashlib.sha256,
+    ).hexdigest()
+    verify_response = client.post(
+        f"/api/v1/orders/{order['id']}/payment/razorpay/verify",
+        headers=customer_auth_headers,
+        json={
+            "provider": "razorpay_upi",
+            "razorpay_order_id": "order_rzp_test_actual_method",
+            "razorpay_payment_id": "pay_test_actual_method",
+            "razorpay_signature": signature,
+        },
+    )
+    assert verify_response.status_code == 200, verify_response.text
+    verify_body = verify_response.json()
+    assert verify_body["payment"]["provider"] == "razorpay_card"
+    assert verify_body["order"]["payment_provider"] == "razorpay_card"

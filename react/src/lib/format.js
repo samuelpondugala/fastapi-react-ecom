@@ -3,6 +3,10 @@ const PAYMENT_PROVIDER_LABELS = {
   cod: 'Cash on Delivery',
   razorpay_upi: 'UPI',
   razorpay_card: 'Card',
+  razorpay_netbanking: 'Netbanking',
+  razorpay_wallet: 'Wallet',
+  razorpay_emi: 'EMI',
+  razorpay_paylater: 'Pay Later',
 };
 
 function toNumber(value) {

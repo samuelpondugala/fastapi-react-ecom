@@ -38,6 +38,23 @@ function loadRazorpayCheckoutScript() {
   });
 }
 
+function buildRazorpayDisplayConfig(provider) {
+  if (provider !== 'razorpay_upi' && provider !== 'razorpay_card') {
+    return undefined;
+  }
+
+  return {
+    display: {
+      sequence: [provider === 'razorpay_upi' ? 'upi' : 'card'],
+      preferences: {
+        // Preserve Razorpay defaults as fallback in case a preferred method
+        // is unavailable for the current merchant/device context.
+        show_default_blocks: true,
+      },
+    },
+  };
+}
+
 const paymentModeDefinitions = [
   {
     provider: 'cod',
@@ -231,33 +248,17 @@ export default function OrderDetailPage() {
         },
       });
 
-      const method =
-        payload.provider === 'razorpay_upi'
-          ? {
-              upi: true,
-              card: false,
-              netbanking: false,
-              wallet: false,
-              emi: false,
-              paylater: false,
-            }
-          : {
-              upi: false,
-              card: true,
-              netbanking: false,
-              wallet: false,
-              emi: false,
-              paylater: false,
-            };
-
       const razorpayOptions = {
         key: checkoutOrder.key_id,
         amount: checkoutOrder.amount,
         currency: checkoutOrder.currency,
         name: 'Commerce Studio',
-        description: `Order #${checkoutOrder.order_number}`,
+        description:
+          payload.provider === 'razorpay_upi'
+            ? `Order #${checkoutOrder.order_number} · UPI`
+            : `Order #${checkoutOrder.order_number} · Card`,
         order_id: checkoutOrder.razorpay_order_id,
-        method,
+        config: buildRazorpayDisplayConfig(payload.provider),
         prefill: {
           name: user?.full_name || undefined,
           email: user?.email || undefined,

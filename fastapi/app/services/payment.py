@@ -54,6 +54,14 @@ FREE_PAYMENT_GATEWAYS: tuple[dict[str, object], ...] = (
 )
 
 SUPPORTED_GATEWAYS = {gateway["code"] for gateway in FREE_PAYMENT_GATEWAYS}
+RAZORPAY_METHOD_PROVIDER_MAP = {
+    "upi": "razorpay_upi",
+    "card": "razorpay_card",
+    "netbanking": "razorpay_netbanking",
+    "wallet": "razorpay_wallet",
+    "emi": "razorpay_emi",
+    "paylater": "razorpay_paylater",
+}
 
 
 @dataclass
@@ -71,6 +79,22 @@ def _money(value: Decimal) -> Decimal:
 def _build_transaction_ref(provider: str) -> str:
     suffix = uuid.uuid4().hex[:16].upper()
     return f"{provider.upper()}-{suffix}"
+
+
+def _normalize_razorpay_provider(provider: str | None, *, fallback: str = "razorpay") -> str:
+    normalized = str(provider or "").strip().lower()
+    if not normalized:
+        return fallback
+    if normalized in SUPPORTED_GATEWAYS or normalized.startswith("razorpay_"):
+        return normalized
+    return RAZORPAY_METHOD_PROVIDER_MAP.get(normalized, f"razorpay_{normalized}")
+
+
+def _resolve_razorpay_provider(*, payment_details: dict | None = None, fallback_provider: str) -> str:
+    actual_method = str((payment_details or {}).get("method") or "").strip().lower()
+    if actual_method:
+        return _normalize_razorpay_provider(actual_method, fallback=_normalize_razorpay_provider(fallback_provider))
+    return _normalize_razorpay_provider(fallback_provider)
 
 
 def _b64url_encode(value: bytes) -> str:
@@ -375,9 +399,10 @@ def verify_and_record_razorpay_payment(
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment not captured by Razorpay")
 
     amount_inr = _money(Decimal(actual_amount_paise) / Decimal("100"))
+    actual_provider = _resolve_razorpay_provider(payment_details=payment_details, fallback_provider=provider)
     payment = Payment(
         order_id=order.id,
-        provider=provider,
+        provider=actual_provider,
         transaction_ref=razorpay_payment_id,
         amount=amount_inr,
         currency="INR",
@@ -385,7 +410,8 @@ def verify_and_record_razorpay_payment(
         paid_at=datetime.now(timezone.utc),
         raw_payload_json={
             "gateway": "razorpay",
-            "provider": provider,
+            "provider": actual_provider,
+            "requested_provider": provider,
             "razorpay_order_id": razorpay_order_id,
             "razorpay_payment_id": razorpay_payment_id,
             "razorpay_signature": razorpay_signature,
@@ -482,9 +508,10 @@ def verify_and_complete_razorpay_checkout(
 
     order = create_order_from_snapshot(db, snapshot)
     amount_inr = _money(Decimal(actual_amount_paise) / Decimal("100"))
+    actual_provider = _resolve_razorpay_provider(payment_details=payment_details, fallback_provider=provider)
     payment = Payment(
         order_id=order.id,
-        provider=provider,
+        provider=actual_provider,
         transaction_ref=razorpay_payment_id,
         amount=amount_inr,
         currency="INR",
@@ -492,7 +519,8 @@ def verify_and_complete_razorpay_checkout(
         paid_at=datetime.now(timezone.utc),
         raw_payload_json={
             "gateway": "razorpay_checkout",
-            "provider": provider,
+            "provider": actual_provider,
+            "requested_provider": provider,
             "checkout_reference": token_payload.get("checkout_reference"),
             "razorpay_order_id": razorpay_order_id,
             "razorpay_payment_id": razorpay_payment_id,
@@ -566,7 +594,10 @@ def process_razorpay_webhook_payload(
         amount_paise = int(payment_entity.get("amount") or 0)
         amount_inr = _money(Decimal(amount_paise) / Decimal("100"))
         currency = str(payment_entity.get("currency") or "INR").upper()
-        provider = str(notes.get("provider") or "razorpay")
+        provider = _resolve_razorpay_provider(
+            payment_details=payment_entity,
+            fallback_provider=str(notes.get("provider") or "razorpay"),
+        )
         db.add(
             Payment(
                 order_id=order.id,

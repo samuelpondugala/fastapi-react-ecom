@@ -91,6 +91,23 @@ function buildPaymentResultPath(status, details = {}) {
   return `/payment-result?${params.toString()}`;
 }
 
+function buildRazorpayDisplayConfig(provider) {
+  if (provider !== 'razorpay_upi' && provider !== 'razorpay_card') {
+    return undefined;
+  }
+
+  return {
+    display: {
+      sequence: [provider === 'razorpay_upi' ? 'upi' : 'card'],
+      preferences: {
+        // Keep Razorpay's supported defaults visible so checkout does not fail
+        // when a method is unavailable for the current device/account context.
+        show_default_blocks: true,
+      },
+    },
+  };
+}
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
   const { token, user } = useAuth();
@@ -306,34 +323,16 @@ export default function CheckoutPage() {
       },
     });
 
-    const method =
-      selectedPaymentOption.provider === 'razorpay_upi'
-        ? {
-            upi: true,
-            card: false,
-            netbanking: false,
-            wallet: false,
-            emi: false,
-            paylater: false,
-          }
-        : {
-            upi: false,
-            card: true,
-            netbanking: false,
-            wallet: false,
-            emi: false,
-            paylater: false,
-          };
-
     await new Promise((resolve, reject) => {
       const razorpay = new window.Razorpay({
         key: checkoutIntent.key_id,
         amount: checkoutIntent.amount,
         currency: checkoutIntent.currency,
         name: 'Commerce Studio',
-        description: 'Checkout payment',
+        description:
+          selectedPaymentOption.provider === 'razorpay_upi' ? 'Checkout payment · UPI' : 'Checkout payment · Card',
         order_id: checkoutIntent.razorpay_order_id,
-        method,
+        config: buildRazorpayDisplayConfig(selectedPaymentOption.provider),
         prefill: {
           name: user?.full_name || undefined,
           email: user?.email || undefined,
