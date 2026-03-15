@@ -66,6 +66,14 @@ export default function App() {
           </ProtectedRoute>
         }
       />
+      <Route
+        path="/payment-result"
+        element={
+          <ProtectedRoute>
+            <PaymentResultPage />
+          </ProtectedRoute>
+        }
+      />
 
       <Route element={<AppShell />}>
         <Route index element={<HomePage />} />

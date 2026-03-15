@@ -11,6 +11,9 @@ from app.models.product import Product, ProductVariant
 from app.models.user import User
 from app.schemas.order import CheckoutRequest, OrderPageRead, OrderRead
 from app.schemas.payment import (
+    CheckoutRazorpayCompleteRequest,
+    CheckoutRazorpayStartRead,
+    CheckoutRazorpayStartRequest,
     OrderPaymentRequest,
     OrderPaymentResult,
     PaymentGatewayRead,
@@ -19,13 +22,15 @@ from app.schemas.payment import (
     RazorpayOrderCreateRequest,
     RazorpayPaymentVerifyRequest,
 )
-from app.services.order import create_order_from_active_cart, restore_unpaid_order_to_cart
+from app.services.order import build_checkout_snapshot, create_order_from_active_cart, restore_unpaid_order_to_cart
 from app.services.payment import (
     FREE_PAYMENT_GATEWAYS,
     build_payment_quote,
+    create_razorpay_checkout_intent,
     create_razorpay_checkout_order,
     process_order_payment,
     process_razorpay_webhook_payload,
+    verify_and_complete_razorpay_checkout,
     verify_and_record_razorpay_payment,
 )
 
@@ -87,6 +92,69 @@ def checkout(
     )
     db.commit()
     return db.scalar(_apply_order_load(select(Order)).where(Order.id == order.id))
+
+
+@router.post(
+    "/checkout/razorpay/start",
+    response_model=CheckoutRazorpayStartRead,
+    summary="Start Razorpay checkout without creating the order yet",
+)
+def start_checkout_razorpay(
+    payload: CheckoutRazorpayStartRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> CheckoutRazorpayStartRead:
+    snapshot = build_checkout_snapshot(
+        db,
+        user_id=current_user.id,
+        shipping_address_id=payload.shipping_address_id,
+        billing_address_id=payload.billing_address_id,
+        shipping_total=payload.shipping_total,
+        tax_total=payload.tax_total,
+        coupon_code=payload.coupon_code,
+    )
+    checkout_intent = create_razorpay_checkout_intent(
+        user_id=current_user.id,
+        provider=payload.provider,
+        snapshot=snapshot,
+        metadata=payload.metadata,
+    )
+    return CheckoutRazorpayStartRead(**checkout_intent)
+
+
+@router.post(
+    "/checkout/razorpay/complete",
+    response_model=OrderPaymentResult,
+    summary="Verify Razorpay checkout payment and create the order",
+)
+def complete_checkout_razorpay(
+    payload: CheckoutRazorpayCompleteRequest,
+    db: Session = Depends(get_db),
+    current_user: User = Depends(get_current_user),
+) -> OrderPaymentResult:
+    payment, order, quote = verify_and_complete_razorpay_checkout(
+        db=db,
+        user_id=current_user.id,
+        provider=payload.provider,
+        checkout_token=payload.checkout_token,
+        razorpay_order_id=payload.razorpay_order_id,
+        razorpay_payment_id=payload.razorpay_payment_id,
+        razorpay_signature=payload.razorpay_signature,
+        metadata=payload.metadata,
+    )
+    db.commit()
+    order = db.scalar(_apply_order_load(select(Order)).where(Order.id == order.id))
+
+    return OrderPaymentResult(
+        order=OrderRead.model_validate(order),
+        payment=payment,
+        quote=PaymentQuoteRead(
+            base_amount=quote.base_amount,
+            tax_amount=quote.tax_amount,
+            gateway_fee=quote.gateway_fee,
+            total_amount=quote.total_amount,
+        ),
+    )
 
 
 @router.get("", response_model=OrderPageRead, summary="List all orders for admin")

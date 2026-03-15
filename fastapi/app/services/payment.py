@@ -4,6 +4,7 @@ import base64
 import hashlib
 import hmac
 import json
+import time
 import uuid
 from dataclasses import dataclass
 from datetime import datetime, timezone
@@ -17,8 +18,10 @@ from sqlalchemy.orm import Session
 
 from app.core.config import get_settings
 from app.models.order import Order, Payment
+from app.services.order import CheckoutSnapshot, create_order_from_snapshot, deserialize_checkout_snapshot, serialize_checkout_snapshot
 
 RAZORPAY_API_BASE_URL = "https://api.razorpay.com/v1"
+CHECKOUT_TOKEN_TTL_SECONDS = 60 * 30
 
 FREE_PAYMENT_GATEWAYS: tuple[dict[str, object], ...] = (
     {
@@ -68,6 +71,49 @@ def _money(value: Decimal) -> Decimal:
 def _build_transaction_ref(provider: str) -> str:
     suffix = uuid.uuid4().hex[:16].upper()
     return f"{provider.upper()}-{suffix}"
+
+
+def _b64url_encode(value: bytes) -> str:
+    return base64.urlsafe_b64encode(value).rstrip(b"=").decode("utf-8")
+
+
+def _b64url_decode(value: str) -> bytes:
+    padding = "=" * (-len(value) % 4)
+    return base64.urlsafe_b64decode(f"{value}{padding}".encode("utf-8"))
+
+
+def _checkout_token_signing_key() -> bytes:
+    settings = get_settings()
+    return hashlib.sha256(f"{settings.JWT_SECRET_KEY}:checkout-intent".encode("utf-8")).digest()
+
+
+def _serialize_checkout_token(payload: dict[str, object]) -> str:
+    raw_payload = json.dumps(payload, separators=(",", ":"), sort_keys=True).encode("utf-8")
+    signature = hmac.new(_checkout_token_signing_key(), raw_payload, hashlib.sha256).digest()
+    return f"{_b64url_encode(raw_payload)}.{_b64url_encode(signature)}"
+
+
+def _deserialize_checkout_token(token: str) -> dict[str, object]:
+    try:
+        encoded_payload, encoded_signature = token.split(".", 1)
+    except ValueError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid checkout token") from exc
+
+    raw_payload = _b64url_decode(encoded_payload)
+    expected_signature = hmac.new(_checkout_token_signing_key(), raw_payload, hashlib.sha256).digest()
+    provided_signature = _b64url_decode(encoded_signature)
+    if not hmac.compare_digest(expected_signature, provided_signature):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid checkout token")
+
+    try:
+        payload = json.loads(raw_payload.decode("utf-8"))
+    except json.JSONDecodeError as exc:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invalid checkout token") from exc
+
+    expires_at = int(payload.get("exp") or 0)
+    if expires_at < int(time.time()):
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Checkout session expired")
+    return payload
 
 
 def _require_razorpay_credentials() -> tuple[str, str]:
@@ -129,6 +175,84 @@ def _calculate_base_amount(order: Order) -> Decimal:
     if base < Decimal("0.00"):
         return Decimal("0.00")
     return _money(base)
+
+
+def _calculate_snapshot_base_amount(snapshot: CheckoutSnapshot) -> Decimal:
+    base = Decimal(snapshot.subtotal) - Decimal(snapshot.discount_total) + Decimal(snapshot.shipping_total)
+    if base < Decimal("0.00"):
+        return Decimal("0.00")
+    return _money(base)
+
+
+def _serialize_checkout_snapshot_token_payload(
+    *,
+    user_id: int,
+    provider: str,
+    checkout_reference: str,
+    snapshot: CheckoutSnapshot,
+    metadata: dict | None = None,
+) -> dict[str, object]:
+    return {
+        "v": 1,
+        "exp": int(time.time()) + CHECKOUT_TOKEN_TTL_SECONDS,
+        "user_id": user_id,
+        "provider": provider,
+        "checkout_reference": checkout_reference,
+        "currency": "INR",
+        "snapshot": serialize_checkout_snapshot(snapshot),
+        "metadata": metadata or {},
+    }
+
+
+def create_razorpay_checkout_intent(
+    *,
+    user_id: int,
+    provider: str,
+    snapshot: CheckoutSnapshot,
+    metadata: dict | None = None,
+) -> dict[str, object]:
+    if provider not in {"razorpay_upi", "razorpay_card"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported Razorpay provider")
+
+    key_id, _ = _require_razorpay_credentials()
+    checkout_reference = f"CHK-{uuid.uuid4().hex[:12].upper()}"
+    amount_inr = _calculate_snapshot_base_amount(snapshot)
+    amount_paise = int((amount_inr * Decimal("100")).quantize(Decimal("1")))
+    checkout_token = _serialize_checkout_token(
+        _serialize_checkout_snapshot_token_payload(
+            user_id=user_id,
+            provider=provider,
+            checkout_reference=checkout_reference,
+            snapshot=snapshot,
+            metadata=metadata,
+        )
+    )
+
+    gateway_order = _razorpay_request(
+        "POST",
+        "/orders",
+        {
+            "amount": amount_paise,
+            "currency": "INR",
+            "receipt": checkout_reference,
+            "notes": {
+                "checkout_reference": checkout_reference,
+                "provider": provider,
+                "user_id": str(user_id),
+            },
+        },
+    )
+
+    return {
+        "key_id": key_id,
+        "provider": provider,
+        "checkout_reference": checkout_reference,
+        "checkout_token": checkout_token,
+        "razorpay_order_id": gateway_order.get("id"),
+        "amount": int(gateway_order.get("amount", amount_paise)),
+        "currency": str(gateway_order.get("currency", "INR")),
+        "status": str(gateway_order.get("status", "created")),
+    }
 
 
 def create_razorpay_checkout_order(
@@ -284,6 +408,115 @@ def verify_and_record_razorpay_payment(
     quote = PaymentQuote(
         base_amount=amount_inr,
         tax_amount=Decimal(order.tax_total or 0),
+        gateway_fee=Decimal("0.00"),
+        total_amount=amount_inr,
+    )
+    return payment, order, quote
+
+
+def verify_and_complete_razorpay_checkout(
+    db: Session,
+    *,
+    user_id: int,
+    provider: str,
+    checkout_token: str,
+    razorpay_order_id: str,
+    razorpay_payment_id: str,
+    razorpay_signature: str,
+    metadata: dict | None = None,
+) -> tuple[Payment, Order, PaymentQuote]:
+    if provider not in {"razorpay_upi", "razorpay_card"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unsupported Razorpay provider")
+
+    token_payload = _deserialize_checkout_token(checkout_token)
+    token_user_id = int(token_payload.get("user_id") or 0)
+    token_provider = str(token_payload.get("provider") or "")
+    if token_user_id != user_id or token_provider != provider:
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Checkout session does not belong to this user")
+
+    _verify_razorpay_signature(
+        razorpay_order_id=razorpay_order_id,
+        razorpay_payment_id=razorpay_payment_id,
+        razorpay_signature=razorpay_signature,
+    )
+
+    existing_payment = db.scalar(select(Payment).where(Payment.transaction_ref == razorpay_payment_id))
+    if existing_payment:
+        if existing_payment.order.user_id != user_id:
+            raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="Payment reference belongs to another user")
+
+        quote = PaymentQuote(
+            base_amount=_calculate_base_amount(existing_payment.order),
+            tax_amount=Decimal(existing_payment.order.tax_total or 0),
+            gateway_fee=Decimal("0.00"),
+            total_amount=Decimal(existing_payment.order.grand_total or 0),
+        )
+        return existing_payment, existing_payment.order, quote
+
+    snapshot = deserialize_checkout_snapshot(dict(token_payload.get("snapshot") or {}))
+    payment_details = _razorpay_request("GET", f"/payments/{razorpay_payment_id}")
+    if str(payment_details.get("order_id") or "") != razorpay_order_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Razorpay order id mismatch")
+
+    expected_amount_paise = int((_calculate_snapshot_base_amount(snapshot) * Decimal("100")).quantize(Decimal("1")))
+    actual_amount_paise = int(payment_details.get("amount") or 0)
+    if actual_amount_paise != expected_amount_paise:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Amount mismatch from Razorpay")
+
+    payment_currency = str(payment_details.get("currency") or "INR").upper()
+    if payment_currency != "INR":
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Unexpected payment currency")
+
+    payment_status = str(payment_details.get("status") or "").lower()
+    if payment_status == "authorized":
+        captured = _razorpay_request(
+            "POST",
+            f"/payments/{razorpay_payment_id}/capture",
+            {"amount": actual_amount_paise, "currency": "INR"},
+        )
+        payment_status = str(captured.get("status") or "").lower()
+        payment_details = captured
+
+    if payment_status not in {"captured", "paid"}:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Payment not captured by Razorpay")
+
+    order = create_order_from_snapshot(db, snapshot)
+    amount_inr = _money(Decimal(actual_amount_paise) / Decimal("100"))
+    payment = Payment(
+        order_id=order.id,
+        provider=provider,
+        transaction_ref=razorpay_payment_id,
+        amount=amount_inr,
+        currency="INR",
+        status="paid",
+        paid_at=datetime.now(timezone.utc),
+        raw_payload_json={
+            "gateway": "razorpay_checkout",
+            "provider": provider,
+            "checkout_reference": token_payload.get("checkout_reference"),
+            "razorpay_order_id": razorpay_order_id,
+            "razorpay_payment_id": razorpay_payment_id,
+            "razorpay_signature": razorpay_signature,
+            "token_metadata": token_payload.get("metadata") or {},
+            "metadata": metadata or {},
+            "gateway_payment": payment_details,
+        },
+    )
+    db.add(payment)
+
+    order.payment_status = "paid"
+    order.tax_total = Decimal(snapshot.tax_total)
+    order.grand_total = amount_inr
+    if order.status in {"placed", "pending", "confirmed"}:
+        order.status = "processing"
+    db.add(order)
+    db.flush()
+    db.refresh(payment)
+    db.refresh(order)
+
+    quote = PaymentQuote(
+        base_amount=_calculate_snapshot_base_amount(snapshot),
+        tax_amount=Decimal(snapshot.tax_total),
         gateway_fee=Decimal("0.00"),
         total_amount=amount_inr,
     )

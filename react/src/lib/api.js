@@ -135,6 +135,10 @@ export const api = {
   },
   orders: {
     checkout: (token, payload) => request('/orders/checkout', { method: 'POST', token, body: payload }),
+    startCheckoutRazorpay: (token, payload) =>
+      request('/orders/checkout/razorpay/start', { method: 'POST', token, body: payload }),
+    completeCheckoutRazorpay: (token, payload) =>
+      request('/orders/checkout/razorpay/complete', { method: 'POST', token, body: payload }),
     listAdmin: (token, query) => request('/orders', { token, query }),
     listMine: (token, query) => request('/orders/me', { token, query }),
     getById: (token, id) => request(`/orders/${id}`, { token }),

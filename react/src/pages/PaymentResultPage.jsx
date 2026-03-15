@@ -22,14 +22,16 @@ function FailureIcon() {
 }
 
 export default function PaymentResultPage() {
-  const { orderId } = useParams();
+  const { orderId: orderIdFromPath } = useParams();
   const [searchParams] = useSearchParams();
+  const orderId = orderIdFromPath || searchParams.get('orderId');
 
   const status = searchParams.get('status') === 'success' ? 'success' : 'failure';
   const provider = searchParams.get('provider');
   const transactionRef = searchParams.get('ref');
   const orderNumber = searchParams.get('order');
   const message = searchParams.get('message');
+  const orderLabel = orderNumber || (orderId ? `#${orderId}` : '--');
 
   const isSuccess = status === 'success';
   const title = isSuccess ? 'Payment successful' : 'Payment unsuccessful';
@@ -48,7 +50,7 @@ export default function PaymentResultPage() {
         <div className="payment-result-meta">
           <p>
             <span>Order</span>
-            <strong>{orderNumber || `#${orderId}`}</strong>
+            <strong>{orderLabel}</strong>
           </p>
           <p>
             <span>Mode</span>
@@ -65,9 +67,11 @@ export default function PaymentResultPage() {
         <div className="row-gap payment-result-card__actions">
           {isSuccess ? (
             <>
-              <Link className="btn" to={`/orders/${orderId}`}>
-                View order
-              </Link>
+              {orderId && (
+                <Link className="btn" to={`/orders/${orderId}`}>
+                  View order
+                </Link>
+              )}
               <Link className="btn btn--ghost" to="/orders">
                 All orders
               </Link>

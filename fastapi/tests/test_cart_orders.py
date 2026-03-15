@@ -531,3 +531,128 @@ def test_razorpay_webhook_marks_order_paid(
     order_response = client.get(f"/api/v1/orders/{order['id']}", headers=customer_auth_headers)
     assert order_response.status_code == 200
     assert order_response.json()["payment_status"] == "paid"
+
+
+def test_online_checkout_start_does_not_create_order_until_payment_is_verified(
+    client: TestClient,
+    customer_auth_headers: dict[str, str],
+    admin_auth_headers: dict[str, str],
+    monkeypatch,
+) -> None:
+    variant_id = _seed_variant(client, admin_auth_headers)
+    add_item_response = client.post(
+        "/api/v1/cart/items",
+        headers=customer_auth_headers,
+        json={"variant_id": variant_id, "quantity": 1},
+    )
+    assert add_item_response.status_code == 201, add_item_response.text
+
+    monkeypatch.setattr("app.services.payment._require_razorpay_credentials", lambda: ("rzp_test_key", "test_secret"))
+
+    def fake_razorpay_request(method: str, path: str, payload: dict | None = None) -> dict:
+        if method == "POST" and path == "/orders":
+            assert payload is not None
+            return {
+                "id": "order_checkout_test_1",
+                "amount": payload["amount"],
+                "currency": payload["currency"],
+                "status": "created",
+            }
+        if method == "GET" and path == "/payments/pay_checkout_test_1":
+            return {
+                "id": "pay_checkout_test_1",
+                "order_id": "order_checkout_test_1",
+                "amount": 109999,
+                "currency": "INR",
+                "status": "captured",
+                "method": "upi",
+            }
+        raise AssertionError(f"Unexpected Razorpay call {method} {path}")
+
+    monkeypatch.setattr("app.services.payment._razorpay_request", fake_razorpay_request)
+
+    start_response = client.post(
+        "/api/v1/orders/checkout/razorpay/start",
+        headers=customer_auth_headers,
+        json={
+            "provider": "razorpay_upi",
+            "shipping_total": "100.00",
+        },
+    )
+    assert start_response.status_code == 200, start_response.text
+    start_body = start_response.json()
+    assert start_body["razorpay_order_id"] == "order_checkout_test_1"
+    assert start_body["checkout_token"]
+
+    orders_before_payment = client.get("/api/v1/orders/me", headers=customer_auth_headers)
+    assert orders_before_payment.status_code == 200, orders_before_payment.text
+    assert orders_before_payment.json() == []
+
+    signature = hmac.new(
+        b"test_secret",
+        b"order_checkout_test_1|pay_checkout_test_1",
+        hashlib.sha256,
+    ).hexdigest()
+    complete_response = client.post(
+        "/api/v1/orders/checkout/razorpay/complete",
+        headers=customer_auth_headers,
+        json={
+            "provider": "razorpay_upi",
+            "checkout_token": start_body["checkout_token"],
+            "razorpay_order_id": "order_checkout_test_1",
+            "razorpay_payment_id": "pay_checkout_test_1",
+            "razorpay_signature": signature,
+        },
+    )
+    assert complete_response.status_code == 200, complete_response.text
+    complete_body = complete_response.json()
+    assert complete_body["order"]["payment_status"] == "paid"
+    assert complete_body["payment"]["transaction_ref"] == "pay_checkout_test_1"
+
+    orders_after_payment = client.get("/api/v1/orders/me", headers=customer_auth_headers)
+    assert orders_after_payment.status_code == 200, orders_after_payment.text
+    assert len(orders_after_payment.json()) == 1
+
+
+def test_online_checkout_start_leaves_cart_intact_when_payment_not_completed(
+    client: TestClient,
+    customer_auth_headers: dict[str, str],
+    admin_auth_headers: dict[str, str],
+    monkeypatch,
+) -> None:
+    variant_id = _seed_variant(client, admin_auth_headers)
+    add_item_response = client.post(
+        "/api/v1/cart/items",
+        headers=customer_auth_headers,
+        json={"variant_id": variant_id, "quantity": 1},
+    )
+    assert add_item_response.status_code == 201, add_item_response.text
+
+    monkeypatch.setattr("app.services.payment._require_razorpay_credentials", lambda: ("rzp_test_key", "test_secret"))
+    monkeypatch.setattr(
+        "app.services.payment._razorpay_request",
+        lambda method, path, payload=None: {
+            "id": "order_checkout_test_2",
+            "amount": payload["amount"],
+            "currency": payload["currency"],
+            "status": "created",
+        },
+    )
+
+    start_response = client.post(
+        "/api/v1/orders/checkout/razorpay/start",
+        headers=customer_auth_headers,
+        json={
+            "provider": "razorpay_card",
+            "shipping_total": "100.00",
+        },
+    )
+    assert start_response.status_code == 200, start_response.text
+
+    cart_response = client.get("/api/v1/cart/me", headers=customer_auth_headers)
+    assert cart_response.status_code == 200, cart_response.text
+    assert len(cart_response.json()["items"]) == 1
+
+    orders_response = client.get("/api/v1/orders/me", headers=customer_auth_headers)
+    assert orders_response.status_code == 200, orders_response.text
+    assert orders_response.json() == []

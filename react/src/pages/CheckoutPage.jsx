@@ -8,6 +8,8 @@ import { errorToast, successToast } from '../lib/toast';
 
 const FREE_DELIVERY_THRESHOLD = 1000;
 const DELIVERY_CHARGE = 100;
+const RAZORPAY_SCRIPT_ID = 'razorpay-checkout-script';
+const RAZORPAY_SCRIPT_URL = 'https://checkout.razorpay.com/v1/checkout.js';
 
 const emptyAddress = {
   label: '',
@@ -57,16 +59,48 @@ const partnerBanks = [
   'IDFC FIRST Bank',
 ];
 
+function loadRazorpayCheckoutScript() {
+  if (window.Razorpay) return Promise.resolve(true);
+
+  const existing = document.getElementById(RAZORPAY_SCRIPT_ID);
+  if (existing) {
+    return new Promise((resolve) => {
+      existing.addEventListener('load', () => resolve(true), { once: true });
+      existing.addEventListener('error', () => resolve(false), { once: true });
+    });
+  }
+
+  return new Promise((resolve) => {
+    const script = document.createElement('script');
+    script.id = RAZORPAY_SCRIPT_ID;
+    script.src = RAZORPAY_SCRIPT_URL;
+    script.async = true;
+    script.onload = () => resolve(true);
+    script.onerror = () => resolve(false);
+    document.body.appendChild(script);
+  });
+}
+
+function buildPaymentResultPath(status, details = {}) {
+  const params = new URLSearchParams({ status });
+  Object.entries(details).forEach(([key, value]) => {
+    if (value !== undefined && value !== null && value !== '') {
+      params.set(key, String(value));
+    }
+  });
+  return `/payment-result?${params.toString()}`;
+}
+
 export default function CheckoutPage() {
   const navigate = useNavigate();
-  const { token } = useAuth();
+  const { token, user } = useAuth();
 
   const [step, setStep] = useState(1);
   const [cart, setCart] = useState(null);
   const [addresses, setAddresses] = useState([]);
   const [shippingAddressId, setShippingAddressId] = useState('');
   const [billingAddressId, setBillingAddressId] = useState('');
-  const [paymentOptionId, setPaymentOptionId] = useState('upi');
+  const [paymentOptionId, setPaymentOptionId] = useState('');
   const [couponInput, setCouponInput] = useState('');
   const [appliedCoupon, setAppliedCoupon] = useState(null);
   const [dismissShippingHint, setDismissShippingHint] = useState(false);
@@ -118,7 +152,7 @@ export default function CheckoutPage() {
   }, [appliedCoupon, subtotal]);
 
   const payableTotal = Math.max(0, subtotal - discountAmount + shippingCharge);
-  const selectedPaymentOption = paymentOptions.find((item) => item.id === paymentOptionId) || paymentOptions[0];
+  const selectedPaymentOption = paymentOptions.find((item) => item.id === paymentOptionId) || null;
   const estimatedDelivery = estimateDeliveryDate(4);
 
   function renderItemIdentity(item) {
@@ -218,6 +252,10 @@ export default function CheckoutPage() {
         errorToast('Please select a billing address.');
         return;
       }
+      if (!selectedPaymentOption) {
+        errorToast('Please select a payment method before continuing.');
+        return;
+      }
       setStep(3);
     }
   }
@@ -226,49 +264,153 @@ export default function CheckoutPage() {
     setStep((prev) => Math.max(1, prev - 1));
   }
 
-  async function placeOrder() {
+  async function placeCodOrder() {
+    const order = await api.orders.checkout(token, {
+      shipping_address_id: shippingAddressId ? Number(shippingAddressId) : null,
+      billing_address_id: billingAddressId ? Number(billingAddressId) : null,
+      coupon_code: appliedCoupon?.code || null,
+      shipping_total: String(shippingCharge.toFixed(2)),
+      tax_total: '0.00',
+    });
+
+    const codResult = await api.orders.payOrder(token, order.id, {
+      provider: 'cod',
+      currency: 'INR',
+      apply_tax: false,
+      tax_mode: 'none',
+      tax_value: '0.00',
+      metadata: {
+        initiated_from: 'checkout',
+      },
+    });
+
+    successToast('Order placed with Cash on Delivery.');
+    navigate(`/orders/${codResult.order.id}`, { replace: true });
+  }
+
+  async function placeOnlineOrder() {
+    const scriptLoaded = await loadRazorpayCheckoutScript();
+    if (!scriptLoaded || !window.Razorpay) {
+      throw new Error('Unable to load Razorpay checkout script.');
+    }
+
+    const checkoutIntent = await api.orders.startCheckoutRazorpay(token, {
+      provider: selectedPaymentOption.provider,
+      shipping_address_id: shippingAddressId ? Number(shippingAddressId) : null,
+      billing_address_id: billingAddressId ? Number(billingAddressId) : null,
+      coupon_code: appliedCoupon?.code || null,
+      shipping_total: String(shippingCharge.toFixed(2)),
+      tax_total: '0.00',
+      metadata: {
+        initiated_from: 'checkout',
+      },
+    });
+
+    const method =
+      selectedPaymentOption.provider === 'razorpay_upi'
+        ? {
+            upi: true,
+            card: false,
+            netbanking: false,
+            wallet: false,
+            emi: false,
+            paylater: false,
+          }
+        : {
+            upi: false,
+            card: true,
+            netbanking: false,
+            wallet: false,
+            emi: false,
+            paylater: false,
+          };
+
+    await new Promise((resolve, reject) => {
+      const razorpay = new window.Razorpay({
+        key: checkoutIntent.key_id,
+        amount: checkoutIntent.amount,
+        currency: checkoutIntent.currency,
+        name: 'Commerce Studio',
+        description: 'Checkout payment',
+        order_id: checkoutIntent.razorpay_order_id,
+        method,
+        prefill: {
+          name: user?.full_name || undefined,
+          email: user?.email || undefined,
+        },
+        notes: {
+          checkout_reference: String(checkoutIntent.checkout_reference),
+        },
+        theme: {
+          color: '#008768',
+        },
+        handler: async (response) => {
+          try {
+            const result = await api.orders.completeCheckoutRazorpay(token, {
+              provider: selectedPaymentOption.provider,
+              checkout_token: checkoutIntent.checkout_token,
+              razorpay_order_id: response.razorpay_order_id,
+              razorpay_payment_id: response.razorpay_payment_id,
+              razorpay_signature: response.razorpay_signature,
+              metadata: {
+                initiated_from: 'checkout',
+              },
+            });
+            successToast('Payment successful.');
+            navigate(
+              buildPaymentResultPath('success', {
+                orderId: result.order.id,
+                provider: result.payment.provider,
+                ref: result.payment.transaction_ref,
+                order: result.order.order_number,
+              }),
+              { replace: true }
+            );
+            resolve();
+          } catch (err) {
+            reject(err);
+          }
+        },
+        modal: {
+          ondismiss: () => {
+            reject(new Error('Payment window closed before completion.'));
+          },
+        },
+      });
+
+      razorpay.on('payment.failed', (event) => {
+        reject(new Error(event?.error?.description || 'Payment failed in Razorpay.'));
+      });
+
+      razorpay.open();
+    });
+  }
+
+  async function handleSubmitOrder() {
+    if (!selectedPaymentOption) {
+      errorToast('Please select a payment method.');
+      return;
+    }
+
     setSubmitting(true);
     setError('');
-    let createdOrderId = null;
     try {
-      const order = await api.orders.checkout(token, {
-        shipping_address_id: shippingAddressId ? Number(shippingAddressId) : null,
-        billing_address_id: billingAddressId ? Number(billingAddressId) : null,
-        coupon_code: appliedCoupon?.code || null,
-        shipping_total: String(shippingCharge.toFixed(2)),
-        tax_total: '0.00',
-      });
-      createdOrderId = order.id;
-
       if (selectedPaymentOption.provider === 'cod') {
-        const codResult = await api.orders.payOrder(token, order.id, {
-          provider: 'cod',
-          currency: 'INR',
-          apply_tax: false,
-          tax_mode: 'none',
-          tax_value: '0.00',
-          metadata: {
-            initiated_from: 'checkout',
-          },
-        });
-        successToast('Order placed with Cash on Delivery.');
-        navigate(`/orders/${codResult.order.id}`, { replace: true });
+        await placeCodOrder();
         return;
       }
 
-      successToast(`Order created. Redirecting to ${selectedPaymentOption.label} payment.`);
-      navigate(`/orders/${order.id}?provider=${selectedPaymentOption.provider}&autostart=1&checkout=1`, {
-        replace: true,
-      });
+      await placeOnlineOrder();
     } catch (err) {
-      if (selectedPaymentOption.provider === 'cod' && createdOrderId) {
-        try {
-          await api.orders.cancelUnpaid(token, createdOrderId);
-        } catch {
-          // Ignore cleanup failures; the API error is the primary signal for the UI.
-        }
-      }
-      setError(err.message || 'Checkout failed.');
+      const message = err.message || 'Checkout failed.';
+      setError(message);
+      navigate(
+        buildPaymentResultPath('failure', {
+          provider: selectedPaymentOption.provider,
+          message,
+        }),
+        { replace: true }
+      );
     } finally {
       setSubmitting(false);
     }
@@ -541,20 +683,22 @@ export default function CheckoutPage() {
             </p>
             <p>
               <span>Payment Mode</span>
-              <strong>{selectedPaymentOption.label}</strong>
+              <strong>{selectedPaymentOption?.label || 'Not selected'}</strong>
             </p>
             <p>
               <span>Total</span>
               <strong>{formatMoney(payableTotal)}</strong>
             </p>
-            <button className="btn" type="button" disabled={submitting} onClick={placeOrder}>
+            <button className="btn" type="button" disabled={submitting || !selectedPaymentOption} onClick={handleSubmitOrder}>
               {submitting
-                ? selectedPaymentOption.provider === 'cod'
+                ? selectedPaymentOption?.provider === 'cod'
                   ? 'Placing COD order...'
                   : 'Opening payment...'
-                : selectedPaymentOption.provider === 'cod'
-                  ? 'Place COD order'
-                  : 'Place order and pay'}
+                : selectedPaymentOption?.provider === 'cod'
+                  ? 'Place order'
+                  : selectedPaymentOption
+                    ? 'Continue to pay'
+                    : 'Select payment method first'}
             </button>
           </div>
         </div>

@@ -5,7 +5,7 @@ from typing import Literal
 from pydantic import BaseModel, Field, model_validator
 
 from app.schemas.common import ORMModel
-from app.schemas.order import OrderRead
+from app.schemas.order import CheckoutRequest, OrderRead
 
 
 class PaymentGatewayRead(BaseModel):
@@ -77,8 +77,36 @@ class RazorpayOrderCreateRead(BaseModel):
     status: str
 
 
+class CheckoutRazorpayStartRequest(CheckoutRequest):
+    provider: Literal["razorpay_upi", "razorpay_card"] = Field(
+        default="razorpay_upi",
+        description="Razorpay checkout mode.",
+    )
+    metadata: dict = Field(default_factory=dict)
+
+
+class CheckoutRazorpayStartRead(BaseModel):
+    key_id: str
+    provider: str
+    checkout_reference: str
+    checkout_token: str
+    razorpay_order_id: str
+    amount: int
+    currency: str
+    status: str
+
+
 class RazorpayPaymentVerifyRequest(BaseModel):
     provider: Literal["razorpay_upi", "razorpay_card"] = Field(default="razorpay_upi")
+    razorpay_order_id: str = Field(min_length=6, max_length=128)
+    razorpay_payment_id: str = Field(min_length=6, max_length=128)
+    razorpay_signature: str = Field(min_length=32, max_length=256)
+    metadata: dict = Field(default_factory=dict)
+
+
+class CheckoutRazorpayCompleteRequest(BaseModel):
+    provider: Literal["razorpay_upi", "razorpay_card"] = Field(default="razorpay_upi")
+    checkout_token: str = Field(min_length=64)
     razorpay_order_id: str = Field(min_length=6, max_length=128)
     razorpay_payment_id: str = Field(min_length=6, max_length=128)
     razorpay_signature: str = Field(min_length=32, max_length=256)
