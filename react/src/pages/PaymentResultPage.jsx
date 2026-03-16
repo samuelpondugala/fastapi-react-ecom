@@ -5,6 +5,7 @@ import { formatPaymentProvider, formatPaymentReference } from '../lib/format';
 function SuccessIcon() {
   return (
     <svg viewBox="0 0 120 120" className="payment-result-icon" aria-hidden="true">
+      <circle className="payment-result-icon__halo payment-result-icon__halo--success" cx="60" cy="60" r="54" />
       <circle className="payment-result-icon__disc payment-result-icon__disc--success" cx="60" cy="60" r="46" />
       <path className="payment-result-icon__mark" d="M38 61.5 53 76l30-31" />
     </svg>
@@ -14,6 +15,7 @@ function SuccessIcon() {
 function FailureIcon() {
   return (
     <svg viewBox="0 0 120 120" className="payment-result-icon" aria-hidden="true">
+      <circle className="payment-result-icon__halo payment-result-icon__halo--failure" cx="60" cy="60" r="54" />
       <circle className="payment-result-icon__disc payment-result-icon__disc--failure" cx="60" cy="60" r="46" />
       <path className="payment-result-icon__mark" d="M43 43 77 77" />
       <path className="payment-result-icon__mark" d="M77 43 43 77" />
@@ -41,7 +43,7 @@ export default function PaymentResultPage() {
 
   return (
     <section className={`payment-result-screen payment-result-screen--${status}`}>
-      <div className="payment-result-card">
+      <div className={`payment-result-card payment-result-card--${status}`}>
         {isSuccess ? <SuccessIcon /> : <FailureIcon />}
         <p className="payment-result-card__eyebrow">{isSuccess ? 'Payment complete' : 'Payment interrupted'}</p>
         <h1>{title}</h1>

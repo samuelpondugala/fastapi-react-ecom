@@ -1208,33 +1208,84 @@ label {
   min-height: 100vh;
   display: grid;
   place-items: center;
+  position: relative;
+  isolation: isolate;
+  overflow: hidden;
   background:
-    radial-gradient(circle at top, rgba(32, 108, 84, 0.3), transparent 42%),
-    #030303;
-  padding: 2rem 1rem;
+    radial-gradient(circle at 8% 8%, rgba(201, 92, 45, 0.17), transparent 26%),
+    radial-gradient(circle at 92% 0%, rgba(0, 135, 104, 0.18), transparent 28%),
+    linear-gradient(180deg, var(--hero-grad-start), var(--bg-main));
+  padding: clamp(2rem, 4vw, 4rem) 1rem;
+}
+
+.payment-result-screen::before,
+.payment-result-screen::after {
+  content: '';
+  position: absolute;
+  inset: auto;
+  border-radius: 999px;
+  pointer-events: none;
+  z-index: -1;
+}
+
+.payment-result-screen::before {
+  width: 280px;
+  height: 280px;
+  top: -60px;
+  right: min(10vw, 80px);
+  background: rgba(0, 135, 104, 0.08);
+  filter: blur(12px);
+}
+
+.payment-result-screen::after {
+  width: 220px;
+  height: 220px;
+  bottom: -50px;
+  left: min(8vw, 64px);
+  background: rgba(201, 92, 45, 0.08);
+  filter: blur(10px);
 }
 
 .payment-result-screen--failure {
   background:
-    radial-gradient(circle at top, rgba(171, 36, 36, 0.28), transparent 42%),
-    #030303;
+    radial-gradient(circle at 10% 8%, rgba(201, 92, 45, 0.18), transparent 26%),
+    radial-gradient(circle at 88% 0%, rgba(178, 59, 53, 0.16), transparent 28%),
+    linear-gradient(180deg, var(--hero-grad-start), var(--bg-main));
 }
 
 .payment-result-card {
   width: min(560px, 100%);
   border-radius: 28px;
-  border: 1px solid rgba(255, 255, 255, 0.09);
-  background: rgba(11, 11, 11, 0.9);
-  box-shadow: 0 30px 80px rgba(0, 0, 0, 0.45);
-  padding: 2rem;
-  color: #f2f5f3;
+  position: relative;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  background: linear-gradient(180deg, var(--bg-panel), var(--surface-soft));
+  box-shadow: 0 26px 60px rgba(25, 56, 52, 0.12);
+  padding: clamp(1.5rem, 4vw, 2.35rem);
+  color: var(--ink);
   text-align: center;
   display: grid;
-  gap: 1rem;
+  gap: 1.05rem;
+}
+
+.payment-result-card::before {
+  content: '';
+  position: absolute;
+  inset: 0 0 auto;
+  height: 6px;
+}
+
+.payment-result-card--success::before {
+  background: linear-gradient(90deg, var(--brand), #41b883);
+}
+
+.payment-result-card--failure::before {
+  background: linear-gradient(90deg, var(--danger), #e17d5f);
 }
 
 .payment-result-card h1 {
   margin: 0;
+  font-size: clamp(1.85rem, 4vw, 2.55rem);
 }
 
 .payment-result-card__eyebrow {
@@ -1242,23 +1293,43 @@ label {
   text-transform: uppercase;
   letter-spacing: 0.18em;
   font-size: 0.75rem;
-  color: rgba(255, 255, 255, 0.72);
+  color: var(--ink-soft);
 }
 
 .payment-result-card__copy {
   margin: 0 auto;
   max-width: 42ch;
-  color: rgba(255, 255, 255, 0.76);
+  color: var(--ink-soft);
 }
 
 .payment-result-card__actions {
+  display: flex;
   justify-content: center;
+  flex-wrap: wrap;
+  gap: 0.75rem;
 }
 
 .payment-result-icon {
   width: 132px;
   height: 132px;
   margin: 0 auto 0.5rem;
+  filter: drop-shadow(0 16px 24px rgba(19, 63, 54, 0.12));
+}
+
+.payment-result-icon__halo {
+  fill: none;
+  stroke-width: 10;
+  opacity: 0.28;
+  transform-origin: center;
+  animation: paymentHalo 820ms ease forwards;
+}
+
+.payment-result-icon__halo--success {
+  stroke: rgba(0, 135, 104, 0.32);
+}
+
+.payment-result-icon__halo--failure {
+  stroke: rgba(178, 59, 53, 0.3);
 }
 
 .payment-result-icon__disc {
@@ -1267,11 +1338,11 @@ label {
 }
 
 .payment-result-icon__disc--success {
-  fill: #16a34a;
+  fill: var(--brand);
 }
 
 .payment-result-icon__disc--failure {
-  fill: #dc2626;
+  fill: var(--danger);
 }
 
 .payment-result-icon__mark {
@@ -1291,7 +1362,8 @@ label {
   text-align: left;
   padding: 1rem 1.1rem;
   border-radius: 20px;
-  background: rgba(255, 255, 255, 0.05);
+  background: var(--surface-soft);
+  border: 1px solid var(--line);
 }
 
 .payment-result-meta p {
@@ -1299,10 +1371,15 @@ label {
   display: flex;
   justify-content: space-between;
   gap: 1rem;
+  align-items: baseline;
 }
 
 .payment-result-meta span {
-  color: rgba(255, 255, 255, 0.66);
+  color: var(--ink-soft);
+}
+
+.payment-result-meta strong {
+  color: var(--ink);
 }
 
 @keyframes spin {
@@ -1319,6 +1396,17 @@ label {
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes paymentHalo {
+  from {
+    opacity: 0;
+    transform: scale(0.76);
+  }
+  to {
+    opacity: 0.28;
+    transform: scale(1);
   }
 }
 
@@ -1399,6 +1487,14 @@ label {
 
   .payment-result-card {
     padding: 1.5rem 1rem;
+  }
+
+  .payment-result-card__actions {
+    flex-direction: column;
+  }
+
+  .payment-result-card__actions .btn {
+    width: 100%;
   }
 
   .payment-result-meta p {
