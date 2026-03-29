@@ -305,6 +305,21 @@ git clone https://github.com/samuelpondugala/fastapi-react-ecom.git
 cd fastapi-react-ecom
 ```
 
+
+## Getting Started
+
+### Prerequisites
+
+- Python 3.10+ (3.12 used in Dockerfile)
+- Node.js 20+ and npm
+
+### 1) Clone
+
+```bash
+git clone https://github.com/samuelpondugala/fastapi-react-ecom.git
+cd fastapi-react-ecom
+```
+
 ### 2) Backend setup
 
 ```bash
@@ -348,6 +363,7 @@ Backend URLs:
 - Swagger: `http://localhost:8000/docs`
 - OpenAPI JSON: `http://localhost:8000/openapi.json`
 - Health: `http://localhost:8000/api/v1/health`
+
 
 ### 3) Frontend setup
 
@@ -591,6 +607,7 @@ python manage.py import-products --from-dummyjson --limit 20 --skip 0
 - Root project summary: [`README.md`](./README.md)
 - Backend details: [`fastapi/README.md`](./fastapi/README.md)
 - Frontend details: [`react/README.md`](./react/README.md)
+- Deployment guide: [`DEPLOYMENT_GUIDE_RENDER_AWS.md`](./DEPLOYMENT_GUIDE_RENDER_AWS.md)
 - ER design file: [`schema.drawio`](./schema.drawio)
 
 ---
